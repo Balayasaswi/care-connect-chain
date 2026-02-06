@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
-import { registerUser, loginUser, addGuardian, getGuardian, getUserById } from "./auth.js";
+import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail } from "./auth.js";
 
 dotenv.config();
 
@@ -81,6 +81,27 @@ app.get("/api/user/:userId", (req, res) => {
   } catch (error) {
     console.error("Get user error:", error);
     res.status(500).json({ error: "Failed to get user" });
+  }
+});
+
+// Get user by email (for guardian access checks)
+app.get("/api/user", (req, res) => {
+  try {
+    const email = (req.query.email || "").toString().toLowerCase().trim();
+
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const user = getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error("Get user by email error:", error);
+    res.status(500).json({ error: "Failed to get user by email" });
   }
 });
 

@@ -28,7 +28,9 @@ export type UserRole = 'student' | 'guardian';
 export interface User {
   id: string;
   email: string;
+  username?: string;
   role: UserRole;
   name?: string; // For guardians
   studentEmail?: string; // For guardians
+  studentId?: string; // For guardians
 }

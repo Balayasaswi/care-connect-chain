@@ -7,32 +7,121 @@ import ChatWindow from './components/ChatWindow.tsx';
 import SessionList from './components/SessionList.tsx';
 import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle } from 'lucide-react';
 
+const API_BASE_URL = 'http://localhost:5000';
+
 // --- Authentication View ---
 const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
   const [role, setRole] = useState<UserRole>('student');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [guardianName, setGuardianName] = useState('');
+  const [guardianEmail, setGuardianEmail] = useState('');
   const [studentEmail, setStudentEmail] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const postJson = async (url: string, body: Record<string, unknown>) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || 'Request failed');
+    }
+
+    return res.json();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+
     const sanitizedEmail = email.toLowerCase().trim();
     const sanitizedStudentEmail = studentEmail.toLowerCase().trim();
+    const sanitizedGuardianEmail = guardianEmail.toLowerCase().trim();
 
-    if (role === 'student') {
-      if (sanitizedEmail && password.length >= 6) {
-        onLogin({ id: btoa(sanitizedEmail), email: sanitizedEmail, role: 'student' });
+    try {
+      if (role === 'student') {
+        if (mode === 'register') {
+          if (!username.trim()) {
+            throw new Error('Username is required.');
+          }
+          if (!sanitizedEmail || password.length < 6) {
+            throw new Error('Enter a valid email and 6+ character password.');
+          }
+
+          await postJson(`${API_BASE_URL}/api/auth/register`, {
+            username: username.trim(),
+            email: sanitizedEmail,
+            password
+          });
+        }
+
+        if (!sanitizedEmail || password.length < 6) {
+          throw new Error('Enter a valid email and 6+ character password.');
+        }
+
+        const loginResult = await postJson(`${API_BASE_URL}/api/auth/login`, {
+          username: sanitizedEmail,
+          password
+        });
+
+        onLogin({
+          id: loginResult.user.id,
+          email: loginResult.user.email,
+          username: loginResult.user.username,
+          role: 'student'
+        });
       } else {
-        setError('Enter a valid email and 6+ character password.');
+        if (!guardianName.trim()) {
+          throw new Error('Guardian name is required.');
+        }
+        if (!sanitizedGuardianEmail) {
+          throw new Error('Guardian email is required.');
+        }
+        if (!sanitizedStudentEmail) {
+          throw new Error('Student email is required.');
+        }
+
+        const studentRes = await fetch(`${API_BASE_URL}/api/user?email=${encodeURIComponent(sanitizedStudentEmail)}`);
+        if (!studentRes.ok) {
+          throw new Error('Student not registered.');
+        }
+        const student = await studentRes.json();
+
+        const guardianRes = await fetch(`${API_BASE_URL}/api/guardian/${student.id}`);
+        if (!guardianRes.ok) {
+          throw new Error('Guardian not registered for this student.');
+        }
+        const guardian = await guardianRes.json();
+
+        if ((guardian.guardian_name || '').toLowerCase() !== guardianName.trim().toLowerCase()) {
+          throw new Error('Guardian name does not match our records.');
+        }
+        if ((guardian.guardian_email || '').toLowerCase() !== sanitizedGuardianEmail) {
+          throw new Error('Guardian email does not match our records.');
+        }
+
+        onLogin({
+          id: guardian.student_id,
+          email: sanitizedGuardianEmail,
+          role: 'guardian',
+          name: guardian.guardian_name,
+          studentEmail: sanitizedStudentEmail,
+          studentId: guardian.student_id
+        });
       }
-    } else {
-      if (guardianName && sanitizedStudentEmail && password.length >= 6) {
-        onLogin({ id: btoa(sanitizedEmail), email: sanitizedEmail, role: 'guardian', name: guardianName, studentEmail: sanitizedStudentEmail });
-      } else {
-        setError('Complete all fields and use a 6+ character password.');
-      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Authentication failed.';
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -62,6 +151,25 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
           </button>
         </div>
 
+        {role === 'student' && (
+          <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+            <button
+              type="button"
+              onClick={() => { setMode('login'); setError(''); }}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${mode === 'login' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('register'); setError(''); }}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${mode === 'register' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
+            >
+              Register
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {role === 'guardian' && (
             <>
@@ -73,6 +181,17 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
                   onChange={(e) => setGuardianName(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   placeholder="Your full name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Guardian Email</label>
+                <input
+                  type="email"
+                  value={guardianEmail}
+                  onChange={(e) => setGuardianEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  placeholder="guardian@example.com"
                   required
                 />
               </div>
@@ -91,37 +210,55 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
           )}
 
           {role === 'student' && (
+            <>
+              {mode === 'register' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Username</label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    placeholder="your_username"
+                    required
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Your Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  placeholder="you@school.edu"
+                  required
+                />
+              </div>
+            </>
+          )}
+
+          {role === 'student' && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Your Email</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Password</label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                placeholder="you@school.edu"
+                placeholder="••••••••"
                 required
               />
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
           {error && <p className="text-rose-500 text-xs text-center">{error}</p>}
           <button
             type="submit"
-            className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 mt-2"
+            disabled={isSubmitting}
+            className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 mt-2 disabled:opacity-60"
           >
-            Access Chain
+            {isSubmitting ? 'Please wait...' : 'Access Chain'}
           </button>
         </form>
       </div>
@@ -139,22 +276,13 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
     const fetchSummaries = async () => {
       try {
         const studentEmail = user.studentEmail?.toLowerCase() || '';
-        const registryRaw = localStorage.getItem('registered_students');
-        let registeredStudents: string[] = [];
-        
-        try {
-          registeredStudents = registryRaw ? JSON.parse(registryRaw) : [];
-        } catch {
-          registeredStudents = [];
-        }
-        
-        if (!registeredStudents.includes(studentEmail)) {
+        const studentId = user.studentId || '';
+
+        if (!studentId || !studentEmail) {
           setStatus('not_found');
           setLoading(false);
           return;
         }
-
-        const studentId = btoa(studentEmail);
         const saved = localStorage.getItem(`sessions_${studentId}`);
         if (!saved) {
           setStatus('no_sessions');
@@ -363,21 +491,6 @@ const App: React.FC = () => {
   const handleLogin = (u: User) => {
     setUser(u);
     localStorage.setItem('care_user', JSON.stringify(u));
-    
-    if (u.role === 'student') {
-      const registryRaw = localStorage.getItem('registered_students');
-      let registeredStudents: string[] = [];
-      try {
-        registeredStudents = registryRaw ? JSON.parse(registryRaw) : [];
-      } catch {
-        registeredStudents = [];
-      }
-      
-      if (!registeredStudents.includes(u.email)) {
-        registeredStudents.push(u.email);
-        localStorage.setItem('registered_students', JSON.stringify(registeredStudents));
-      }
-    }
   };
 
   const handleLogout = () => {
