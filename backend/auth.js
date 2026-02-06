@@ -1,6 +1,31 @@
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import db from "./database.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const exportsDir = path.join(__dirname, "exports");
+const usersCsvPath = path.join(exportsDir, "users.csv");
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes(",") || str.includes("\n") || str.includes('"')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export function exportUsersCsv() {
+  fs.mkdirSync(exportsDir, { recursive: true });
+  const rows = db.prepare("SELECT id, username, email, created_at FROM users ORDER BY created_at DESC").all();
+  const header = ["id", "username", "email", "created_at"].join(",");
+  const lines = rows.map((r) => [r.id, r.username, r.email, r.created_at].map(csvEscape).join(","));
+  fs.writeFileSync(usersCsvPath, [header, ...lines].join("\n"), "utf-8");
+}
 
 // Generate hex UUID (hexadecimal unique ID)
 export function generateHexId() {
@@ -28,6 +53,12 @@ export async function registerUser(username, email, password) {
     );
     
     stmt.run(userId, username, email, hashedPassword);
+
+    try {
+      exportUsersCsv();
+    } catch (csvError) {
+      console.warn("CSV export failed:", csvError.message);
+    }
 
     return { success: true, userId };
   } catch (error) {
