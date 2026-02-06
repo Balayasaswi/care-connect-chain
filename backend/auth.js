@@ -9,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const exportsDir = path.join(__dirname, "exports");
 const usersCsvPath = path.join(exportsDir, "users.csv");
+const guardiansCsvPath = path.join(exportsDir, "guardians.csv");
 
 function csvEscape(value) {
   if (value === null || value === undefined) return "";
@@ -25,6 +26,23 @@ export function exportUsersCsv() {
   const header = ["id", "username", "email", "created_at"].join(",");
   const lines = rows.map((r) => [r.id, r.username, r.email, r.created_at].map(csvEscape).join(","));
   fs.writeFileSync(usersCsvPath, [header, ...lines].join("\n"), "utf-8");
+}
+
+export function exportGuardiansCsv() {
+  fs.mkdirSync(exportsDir, { recursive: true });
+  const rows = db.prepare(
+    "SELECT student_id, guardian_name, guardian_email, guardian_phone, relationship, created_at FROM guardians ORDER BY created_at DESC"
+  ).all();
+  const header = ["student_id", "guardian_name", "guardian_email", "guardian_phone", "relationship", "created_at"].join(",");
+  const lines = rows.map((r) => [
+    r.student_id,
+    r.guardian_name,
+    r.guardian_email,
+    r.guardian_phone,
+    r.relationship,
+    r.created_at
+  ].map(csvEscape).join(","));
+  fs.writeFileSync(guardiansCsvPath, [header, ...lines].join("\n"), "utf-8");
 }
 
 // Generate hex UUID (hexadecimal unique ID)
@@ -121,6 +139,12 @@ export function addGuardian(studentId, guardianData) {
     `);
 
     stmt.run(studentId, guardian_name, guardian_email, guardian_phone, relationship);
+
+    try {
+      exportGuardiansCsv();
+    } catch (csvError) {
+      console.warn("Guardians CSV export failed:", csvError.message);
+    }
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
