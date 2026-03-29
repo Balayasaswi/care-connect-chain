@@ -1,7 +1,34 @@
-import { ChatMessage, SessionSummary } from "../types";
+import { ChatMessage, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, SessionRecord, SessionSummary } from "../types";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
 const API_BASE_URL = "http://localhost:5000";
+
+type IpfsPinResponse = {
+  cid: string;
+  uri: string;
+  gatewayUrl: string;
+  pinSize?: number;
+  timestamp?: string;
+};
+
+type BlockchainRecordPayload = {
+  chainId: number;
+  address: string;
+  txHash: string;
+  timestamp: string;
+  userId?: string;
+  sessionId?: string;
+  cid?: string;
+  contractAddress?: string;
+};
+
+type SessionPinPayload = {
+  sessionId: string;
+  userId: string;
+  summary: SessionSummary;
+  history: ChatMessage[];
+  pinnedAt: string;
+};
 
 class GeminiService {
   async getChatResponse(
@@ -36,16 +63,257 @@ class GeminiService {
 
   // (stub for later – backend endpoint not added yet)
   async generateSummary(
-    _history: ChatMessage[],
-    _userId: string
+    history: ChatMessage[],
+    userId: string
   ): Promise<SessionSummary> {
-    throw new Error("Summary endpoint not implemented yet.");
+    const res = await fetch(`${API_BASE_URL}/api/summary`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        history,
+        userId
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Summary error: ${errText}`);
+    }
+
+    return res.json();
   }
 
   async getGuardianReport(
-    _summaries: SessionSummary[]
+    summaries: SessionSummary[]
   ): Promise<string> {
-    throw new Error("Guardian report endpoint not implemented yet.");
+    if (!summaries.length) {
+      return "No sessions found.";
+    }
+
+    return summaries
+      .map((summary) => {
+        const keywords = Array.isArray(summary.keywords) ? summary.keywords.join(", ") : "";
+        return [
+          `Session Date: ${summary.start_time_stamp}`,
+          `Emotion: ${summary.emotion}`,
+          `Keywords: ${keywords}`,
+          `Summary: ${summary.summary}`
+        ].join("\n");
+      })
+      .join("\n\n");
+  }
+
+  async pinSessionToIpfs(payload: SessionPinPayload): Promise<IpfsPinResponse> {
+    const res = await fetch(`${API_BASE_URL}/api/ipfs/pin-session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`IPFS pin error: ${errText}`);
+    }
+
+    return res.json();
+  }
+
+  async recordBlockchainTx(payload: BlockchainRecordPayload): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE_URL}/api/blockchain/record`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Blockchain record error: ${errText}`);
+    }
+
+    return res.json();
+  }
+
+  async fetchGuardianSummaries(studentId: string, guardianEmail: string): Promise<SessionSummary[]> {
+    const url = new URL(`${API_BASE_URL}/api/guardian/summaries`);
+    url.searchParams.set("student_id", studentId);
+    url.searchParams.set("guardian_email", guardianEmail);
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Guardian summaries error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data.summaries) ? data.summaries : [];
+  }
+
+  async fetchCounsellorSummaries(counsellorEmail: string): Promise<SessionSummary[]> {
+    const url = new URL(`${API_BASE_URL}/api/counsellor/summaries`);
+    url.searchParams.set("counsellor_email", counsellorEmail);
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Counsellor summaries error: ${errText}`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.summaries) ? data.summaries : [];
+  }
+
+  async fetchCounsellorStudents(counsellorEmail: string): Promise<CounsellorStudent[]> {
+    const url = new URL(`${API_BASE_URL}/api/counsellor/students`);
+    url.searchParams.set("counsellor_email", counsellorEmail);
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Counsellor students error: ${errText}`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.students) ? data.students : [];
+  }
+
+  async fetchInstitutionSummaries(collegeCode: string): Promise<SessionSummary[]> {
+    const url = new URL(`${API_BASE_URL}/api/institution/summaries`);
+    url.searchParams.set("college_code", collegeCode);
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Institution summaries error: ${errText}`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.summaries) ? data.summaries : [];
+  }
+
+  async fetchSessions(userId: string): Promise<SessionRecord[]> {
+    const url = new URL(`${API_BASE_URL}/api/sessions`);
+    url.searchParams.set("user_id", userId);
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Sessions fetch error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data.sessions) ? data.sessions : [];
+  }
+
+  async createNetworkConnectRequest(payload: {
+    studentId: string;
+    actorId: string;
+    actorRole: NetworkActorRole;
+    relationType?: string;
+  }): Promise<NetworkConnection> {
+    const res = await fetch(`${API_BASE_URL}/api/network/connect-request`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        student_id: payload.studentId,
+        actor_id: payload.actorId,
+        actor_role: payload.actorRole,
+        relation_type: payload.relationType
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Network connect error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.connection as NetworkConnection;
+  }
+
+  async updateNetworkConnectionStatus(connectionId: string, studentId: string, status: Exclude<NetworkStatus, "pending">): Promise<NetworkConnection> {
+    const res = await fetch(`${API_BASE_URL}/api/network/approve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        connection_id: connectionId,
+        student_id: studentId,
+        status
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Network approve error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.connection as NetworkConnection;
+  }
+
+  async fetchNetworkConnectionsByStudent(studentId: string, statuses: NetworkStatus[] = []): Promise<NetworkConnection[]> {
+    const url = new URL(`${API_BASE_URL}/api/network/my-connections`);
+    url.searchParams.set("student_id", studentId);
+    if (statuses.length) {
+      url.searchParams.set("statuses", statuses.join(","));
+    }
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Network fetch error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data.connections) ? data.connections : [];
+  }
+
+  async fetchNetworkConnectionsByActor(actorId: string, actorRole: NetworkActorRole, statuses: NetworkStatus[] = []): Promise<NetworkConnection[]> {
+    const url = new URL(`${API_BASE_URL}/api/network/my-connections`);
+    url.searchParams.set("actor_id", actorId);
+    url.searchParams.set("actor_role", actorRole);
+    if (statuses.length) {
+      url.searchParams.set("statuses", statuses.join(","));
+    }
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Network fetch error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data.connections) ? data.connections : [];
+  }
+
+  async disconnectNetworkConnection(connectionId: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/api/network/disconnect`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ connection_id: connectionId })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Network disconnect error: ${errText}`);
+    }
   }
 }
 
