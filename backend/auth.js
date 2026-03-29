@@ -852,3 +852,134 @@ export function deleteNetworkConnection(connectionId) {
   db.prepare("DELETE FROM network_connections WHERE id = ?").run(normalizedId);
   return { success: true };
 }
+
+function normalizeRequestUrgency(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["critical", "bad"].includes(normalized)) {
+    return normalized;
+  }
+  return "";
+}
+
+function normalizeRequestStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["pending", "session_created", "resolved"].includes(normalized)) {
+    return normalized;
+  }
+  return "";
+}
+
+export function createCounsellorRequest(payload) {
+  const studentId = String(payload?.studentId || "").trim();
+  const sessionId = String(payload?.sessionId || "").trim();
+  const sessionEmotion = String(payload?.sessionEmotion || "").trim().toUpperCase();
+  const urgency = normalizeRequestUrgency(payload?.urgency);
+  const reason = String(payload?.reason || "").trim();
+  const requestedByRole = String(payload?.requestedByRole || "").trim().toLowerCase();
+  const requestedByEmail = String(payload?.requestedByEmail || "").trim().toLowerCase();
+
+  if (!studentId || !urgency || !requestedByEmail || !requestedByRole) {
+    return { success: false, error: "student_id, urgency, requested_by_role, and requested_by_email are required" };
+  }
+
+  if (!["guardian", "institution"].includes(requestedByRole)) {
+    return { success: false, error: "requested_by_role must be guardian or institution" };
+  }
+
+  const student = getUserById(studentId);
+  if (!student) {
+    return { success: false, error: "Student not found" };
+  }
+
+  const id = generateHexId();
+
+  db.prepare(
+    `INSERT INTO counsellor_requests (
+      id, student_id, session_id, session_emotion, urgency, reason, requested_by_role, requested_by_email, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
+  ).run(
+    id,
+    studentId,
+    sessionId || null,
+    sessionEmotion || null,
+    urgency,
+    reason || null,
+    requestedByRole,
+    requestedByEmail
+  );
+
+  const created = db
+    .prepare(
+      `SELECT r.*, u.username AS student_username, u.email AS student_email
+       FROM counsellor_requests r
+       JOIN users u ON u.id = r.student_id
+       WHERE r.id = ?`
+    )
+    .get(id);
+
+  return { success: true, request: created };
+}
+
+export function listCounsellorRequestsForCounsellor(counsellorEmail) {
+  const normalizedCounsellorEmail = String(counsellorEmail || "").trim().toLowerCase();
+  if (!normalizedCounsellorEmail) {
+    return { success: false, error: "counsellor_email is required" };
+  }
+
+  const counsellor = getCounsellorByEmail(normalizedCounsellorEmail);
+  if (!counsellor) {
+    return { success: false, error: "Counsellor not found" };
+  }
+
+  const students = getUsersByCounsellorInstitution(counsellor.aishe_code, counsellor.udise_code);
+  const studentIds = students.map((student) => String(student.id));
+
+  if (!studentIds.length) {
+    return { success: true, requests: [] };
+  }
+
+  const placeholders = studentIds.map(() => "?").join(", ");
+  const requests = db
+    .prepare(
+      `SELECT r.*, u.username AS student_username, u.email AS student_email
+       FROM counsellor_requests r
+       JOIN users u ON u.id = r.student_id
+       WHERE r.student_id IN (${placeholders})
+       ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'session_created' THEN 1 ELSE 2 END, r.created_at DESC`
+    )
+    .all(...studentIds);
+
+  return { success: true, requests };
+}
+
+export function updateCounsellorRequestStatus(requestId, status, handledBy) {
+  const normalizedRequestId = String(requestId || "").trim();
+  const normalizedStatus = normalizeRequestStatus(status);
+  const normalizedHandledBy = String(handledBy || "").trim().toLowerCase();
+
+  if (!normalizedRequestId || !normalizedStatus || !normalizedHandledBy) {
+    return { success: false, error: "request id, status, and handled_by are required" };
+  }
+
+  const existing = db.prepare("SELECT * FROM counsellor_requests WHERE id = ?").get(normalizedRequestId);
+  if (!existing) {
+    return { success: false, error: "Request not found" };
+  }
+
+  db.prepare(
+    `UPDATE counsellor_requests
+     SET status = ?, handled_by = ?, handled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`
+  ).run(normalizedStatus, normalizedHandledBy, normalizedRequestId);
+
+  const updated = db
+    .prepare(
+      `SELECT r.*, u.username AS student_username, u.email AS student_email
+       FROM counsellor_requests r
+       JOIN users u ON u.id = r.student_id
+       WHERE r.id = ?`
+    )
+    .get(normalizedRequestId);
+
+  return { success: true, request: updated };
+}

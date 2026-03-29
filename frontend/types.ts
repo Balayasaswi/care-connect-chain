@@ -61,6 +61,27 @@ export interface CounsellorStudent {
   email: string;
 }
 
+export type CounsellorRequestUrgency = 'critical' | 'bad';
+export type CounsellorRequestStatus = 'pending' | 'session_created' | 'resolved';
+
+export interface CounsellorRequest {
+  id: string;
+  student_id: string;
+  student_username?: string;
+  student_email?: string;
+  session_id?: string;
+  session_emotion?: string;
+  urgency: CounsellorRequestUrgency;
+  reason?: string;
+  requested_by_role: 'guardian' | 'institution';
+  requested_by_email: string;
+  status: CounsellorRequestStatus;
+  handled_by?: string;
+  handled_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type NetworkActorRole = 'student' | 'guardian' | 'counsellor' | 'institution';
 export type NetworkStatus = 'pending' | 'active' | 'rejected' | 'blocked';
 

@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
-import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection } from "./auth.js";
+import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus } from "./auth.js";
 
 dotenv.config();
 
@@ -770,6 +770,82 @@ app.get("/api/counsellor/summaries", async (req, res) => {
   } catch (error) {
     console.error("Counsellor summaries error:", error);
     res.status(500).json({ error: "Failed to fetch summaries" });
+  }
+});
+
+app.post("/api/counsellor/requests", (req, res) => {
+  try {
+    const { student_id, session_id, session_emotion, urgency, reason, requested_by_role, requested_by_email } = req.body || {};
+
+    const result = createCounsellorRequest({
+      studentId: student_id,
+      sessionId: session_id,
+      sessionEmotion: session_emotion,
+      urgency,
+      reason,
+      requestedByRole: requested_by_role,
+      requestedByEmail: requested_by_email
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ success: true, request: result.request });
+  } catch (error) {
+    console.error("Counsellor request create error:", error);
+    res.status(500).json({ error: "Failed to create counsellor request" });
+  }
+});
+
+app.get("/api/counsellor/requests", (req, res) => {
+  try {
+    const counsellorEmail = String(req.query.counsellor_email || "").toLowerCase().trim();
+    if (!counsellorEmail) {
+      return res.status(400).json({ error: "counsellor_email is required" });
+    }
+
+    const result = listCounsellorRequestsForCounsellor(counsellorEmail);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ requests: result.requests || [] });
+  } catch (error) {
+    console.error("Counsellor request list error:", error);
+    res.status(500).json({ error: "Failed to fetch counsellor requests" });
+  }
+});
+
+app.post("/api/counsellor/requests/:requestId/create-session", (req, res) => {
+  try {
+    const requestId = String(req.params.requestId || "").trim();
+    const counsellorEmail = String(req.body?.counsellor_email || "").toLowerCase().trim();
+
+    if (!requestId || !counsellorEmail) {
+      return res.status(400).json({ error: "requestId and counsellor_email are required" });
+    }
+
+    const result = updateCounsellorRequestStatus(requestId, "session_created", counsellorEmail);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    const urgency = String(result.request?.urgency || "").toLowerCase();
+    const supportWindow = urgency === "critical" ? "within 30 minutes" : "within 24 hours";
+
+    res.json({
+      success: true,
+      request: result.request,
+      sessionPlan: {
+        type: "support-session",
+        priority: urgency || "bad",
+        recommendedStart: supportWindow
+      }
+    });
+  } catch (error) {
+    console.error("Counsellor create-session error:", error);
+    res.status(500).json({ error: "Failed to create support session" });
   }
 });
 

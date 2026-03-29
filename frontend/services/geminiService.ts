@@ -1,4 +1,4 @@
-import { ChatMessage, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, SessionRecord, SessionSummary } from "../types";
+import { ChatMessage, CounsellorRequest, CounsellorRequestUrgency, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, SessionRecord, SessionSummary } from "../types";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
@@ -182,6 +182,70 @@ class GeminiService {
     }
     const data = await res.json();
     return Array.isArray(data.students) ? data.students : [];
+  }
+
+  async createCounsellorRequest(payload: {
+    studentId: string;
+    sessionId?: string;
+    sessionEmotion?: string;
+    urgency: CounsellorRequestUrgency;
+    reason?: string;
+    requestedByRole: "guardian" | "institution";
+    requestedByEmail: string;
+  }): Promise<CounsellorRequest> {
+    const res = await fetch(`${API_BASE_URL}/api/counsellor/requests`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        student_id: payload.studentId,
+        session_id: payload.sessionId,
+        session_emotion: payload.sessionEmotion,
+        urgency: payload.urgency,
+        reason: payload.reason,
+        requested_by_role: payload.requestedByRole,
+        requested_by_email: payload.requestedByEmail
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Counsellor request create error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.request as CounsellorRequest;
+  }
+
+  async fetchCounsellorRequests(counsellorEmail: string): Promise<CounsellorRequest[]> {
+    const url = new URL(`${API_BASE_URL}/api/counsellor/requests`);
+    url.searchParams.set("counsellor_email", counsellorEmail);
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Counsellor request list error: ${errText}`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.requests) ? data.requests : [];
+  }
+
+  async createCounsellorSessionFromRequest(requestId: string, counsellorEmail: string): Promise<{ request: CounsellorRequest }> {
+    const res = await fetch(`${API_BASE_URL}/api/counsellor/requests/${requestId}/create-session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ counsellor_email: counsellorEmail })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Counsellor session create error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return { request: data.request as CounsellorRequest };
   }
 
   async fetchInstitutionSummaries(collegeCode: string): Promise<SessionSummary[]> {

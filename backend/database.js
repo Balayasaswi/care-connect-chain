@@ -153,6 +153,30 @@ function initDatabase() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_network_actor ON network_connections(actor_id, actor_role)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_network_status ON network_connections(status)");
 
+  // Create counsellor escalation requests from guardians/institutions
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS counsellor_requests (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      session_id TEXT,
+      session_emotion TEXT,
+      urgency TEXT NOT NULL,
+      reason TEXT,
+      requested_by_role TEXT NOT NULL,
+      requested_by_email TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      handled_by TEXT,
+      handled_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_student ON counsellor_requests(student_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_status ON counsellor_requests(status)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_created_at ON counsellor_requests(created_at DESC)");
+
   console.log("✅ Database initialized successfully");
 }
 

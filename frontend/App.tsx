@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent } from './types.ts';
+import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest } from './types.ts';
 import { gemini } from './services/geminiService.ts';
 import { connectWallet, storeCidToChain } from './services/chainService.ts';
 import ChatWindow from './components/ChatWindow.tsx';
@@ -566,6 +566,9 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_sessions' | 'ready'>('ready');
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
+  const [requestNotice, setRequestNotice] = useState('');
 
   useEffect(() => {
     const fetchSummaries = async () => {
@@ -580,6 +583,8 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         }
 
         const summaries = await gemini.fetchGuardianSummaries(studentId, user.email);
+        const fetchedSessions = await gemini.fetchSessions(studentId);
+        setSessions(Array.isArray(fetchedSessions) ? fetchedSessions : []);
         if (summaries.length === 0) {
           setStatus('no_sessions');
           return;
@@ -596,6 +601,32 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
     };
     fetchSummaries();
   }, [user.studentEmail, user.studentId, user.email]);
+
+  const handleRequestCounsellor = async (session: SessionRecord) => {
+    if (!user.studentId) return;
+
+    setRequestingSessionId(session.id);
+    setRequestNotice('');
+
+    try {
+      const urgency = session.summary.emotion === 'CRITICAL' ? 'critical' : 'bad';
+      await gemini.createCounsellorRequest({
+        studentId: user.studentId,
+        sessionId: session.id,
+        sessionEmotion: session.summary.emotion,
+        urgency,
+        reason: `Guardian escalated ${session.summary.emotion} behaviour from session summary.`,
+        requestedByRole: 'guardian',
+        requestedByEmail: user.email
+      });
+      setRequestNotice('Request sent to counsellor successfully.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
+      setRequestNotice(message);
+    } finally {
+      setRequestingSessionId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -637,6 +668,23 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
             </div>
           )}
 
+          {sessions.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="font-serif text-xl text-slate-800">Session Cards</h3>
+              {requestNotice && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                  {requestNotice}
+                </div>
+              )}
+              <SessionList
+                sessions={sessions}
+                onSelect={() => undefined}
+                onRequestCounsellor={handleRequestCounsellor}
+                requestingSessionId={requestingSessionId}
+              />
+            </div>
+          )}
+
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             <Lock size={12} />
             Secure Guardian Terminal
@@ -651,18 +699,23 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
   const [report, setReport] = useState<string>('');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
+  const [requests, setRequests] = useState<CounsellorRequest[]>([]);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+  const [requestNotice, setRequestNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'no_sessions' | 'ready'>('ready');
 
   useEffect(() => {
     const fetchSummaries = async () => {
       try {
-        const [linkedStudents, summaries] = await Promise.all([
+        const [linkedStudents, summaries, pendingRequests] = await Promise.all([
           gemini.fetchCounsellorStudents(user.email),
-          gemini.fetchCounsellorSummaries(user.email)
+          gemini.fetchCounsellorSummaries(user.email),
+          gemini.fetchCounsellorRequests(user.email)
         ]);
 
         setStudents(linkedStudents);
+        setRequests(Array.isArray(pendingRequests) ? pendingRequests : []);
         if (linkedStudents.length === 0) {
           setStatus('no_students');
           setLoading(false);
@@ -682,6 +735,22 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
     };
     fetchSummaries();
   }, [user.email]);
+
+  const handleCreateSessionFromRequest = async (request: CounsellorRequest) => {
+    setProcessingRequestId(request.id);
+    setRequestNotice('');
+    try {
+      const result = await gemini.createCounsellorSessionFromRequest(request.id, user.email);
+      setRequests((prev) => prev.map((item) => (item.id === request.id ? result.request : item)));
+      const recommendedStart = request.urgency === 'critical' ? 'within 30 minutes' : 'within 24 hours';
+      setRequestNotice(`Support session created for ${request.student_username || request.student_email || request.student_id} (${recommendedStart}).`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create support session.';
+      setRequestNotice(message);
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-teal-50">
@@ -731,6 +800,48 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
             </div>
           )}
 
+          <div className="space-y-4 border-t border-slate-100 pt-6">
+            <h3 className="text-lg font-serif text-slate-900">Escalation Requests</h3>
+            {requestNotice && (
+              <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-xs text-teal-700">
+                {requestNotice}
+              </div>
+            )}
+            {requests.length === 0 ? (
+              <p className="text-sm text-slate-500">No requests received yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {requests.map((request) => (
+                  <div key={request.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {request.student_username || request.student_email || request.student_id}
+                      </p>
+                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest ${request.urgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {request.urgency}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      From {request.requested_by_role}: {request.requested_by_email}
+                    </p>
+                    {request.reason && <p className="text-sm text-slate-700">{request.reason}</p>}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Status: {request.status}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCreateSessionFromRequest(request)}
+                        disabled={request.status === 'session_created' || processingRequestId === request.id}
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 disabled:opacity-60"
+                      >
+                        {processingRequestId === request.id ? 'Creating...' : request.status === 'session_created' ? 'Session Created' : 'Create Support Session'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             <Lock size={12} />
             Secure Counsellor Terminal
@@ -752,6 +863,8 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
+  const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
+  const [requestNotice, setRequestNotice] = useState('');
 
   const normalizedStudentSearch = studentSearch.trim().toLowerCase();
   const filteredStudents = students.filter((student) => {
@@ -814,6 +927,31 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     };
     fetchSummaries();
   }, [user.collegeCode]);
+
+  const handleRequestCounsellor = async (session: SessionRecord) => {
+    if (!selectedStudent) return;
+
+    setRequestingSessionId(session.id);
+    setRequestNotice('');
+    try {
+      const urgency = session.summary.emotion === 'CRITICAL' ? 'critical' : 'bad';
+      await gemini.createCounsellorRequest({
+        studentId: selectedStudent.id,
+        sessionId: session.id,
+        sessionEmotion: session.summary.emotion,
+        urgency,
+        reason: `Institution escalated ${session.summary.emotion} behaviour from session summary.`,
+        requestedByRole: 'institution',
+        requestedByEmail: user.email
+      });
+      setRequestNotice('Request sent to counsellor successfully.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
+      setRequestNotice(message);
+    } finally {
+      setRequestingSessionId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-amber-50">
@@ -891,6 +1029,11 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
                   {selectedStudent ? `Sessions - ${selectedStudent.username || selectedStudent.email}` : 'Select a student'}
                 </h4>
+                {requestNotice && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                    {requestNotice}
+                  </div>
+                )}
 
                 {sessionsLoading ? (
                   <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
@@ -898,6 +1041,8 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                   <SessionList
                     sessions={selectedStudentSessions}
                     onSelect={(session) => setSelectedSession(session)}
+                    onRequestCounsellor={handleRequestCounsellor}
+                    requestingSessionId={requestingSessionId}
                     showSummary={false}
                   />
                 ) : (

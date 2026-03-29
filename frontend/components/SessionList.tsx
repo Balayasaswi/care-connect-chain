@@ -8,11 +8,13 @@ interface SessionListProps {
   onSelect: (session: SessionRecord) => void;
   onDelete?: (session: SessionRecord) => void;
   onStoreCid?: (session: SessionRecord) => void;
+  onRequestCounsellor?: (session: SessionRecord) => void;
+  requestingSessionId?: string | null;
   storingSessionId?: string | null;
   showSummary?: boolean;
 }
 
-const SessionList: React.FC<SessionListProps> = ({ sessions, onSelect, onDelete, onStoreCid, storingSessionId, showSummary = true }) => {
+const SessionList: React.FC<SessionListProps> = ({ sessions, onSelect, onDelete, onStoreCid, onRequestCounsellor, requestingSessionId, storingSessionId, showSummary = true }) => {
   if (sessions.length === 0) {
     return (
       <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 shadow-sm">
@@ -110,6 +112,23 @@ const SessionList: React.FC<SessionListProps> = ({ sessions, onSelect, onDelete,
                     : storingSessionId === session.id
                       ? 'Storing...'
                       : 'Store CID'}
+                </button>
+              )}
+              {onRequestCounsellor && ['CRITICAL', 'BAD'].includes(session.summary?.emotion || '') && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (requestingSessionId !== session.id) {
+                      onRequestCounsellor(session);
+                    }
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-widest text-amber-700 hover:text-amber-800"
+                  aria-label="Request to counsellor"
+                  disabled={requestingSessionId === session.id}
+                >
+                  {requestingSessionId === session.id ? 'Sending...' : 'Request to Counsellor'}
                 </button>
               )}
               <span className="text-slate-400 group-hover:text-slate-600 transition-colors">
