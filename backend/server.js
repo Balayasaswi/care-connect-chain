@@ -171,10 +171,21 @@ async function fetchIpfsJson(cid) {
   throw new Error("Unable to fetch CID from configured gateways");
 }
 
-// Create Groq client ONCE
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+let groqClient = null;
+
+function getGroqClient() {
+  if (groqClient) {
+    return groqClient;
+  }
+
+  const apiKey = String(process.env.GROQ_API_KEY || "").trim();
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is missing");
+  }
+
+  groqClient = new Groq({ apiKey });
+  return groqClient;
+}
 
 function buildSummaryPrompt(userId, history) {
   const transcript = history
@@ -1011,6 +1022,7 @@ app.get("/api/guardian/:studentId", (req, res) => {
 // Chat endpoint
 app.post("/api/chat", async (req, res) => {
   try {
+    const groq = getGroqClient();
     const { history = [], message, systemInstruction } = req.body;
 
     if (!message) {
@@ -1041,6 +1053,9 @@ app.post("/api/chat", async (req, res) => {
 
   } catch (error) {
     console.error("🔥 GROQ GENERATE FAILED:", error);
+    if (String(error?.message || "").includes("GROQ_API_KEY is missing")) {
+      return res.status(503).json({ error: "GROQ_API_KEY is missing on backend" });
+    }
     res.status(500).json({ error: "Groq service failed" });
   }
 });
@@ -1049,6 +1064,7 @@ app.post("/api/chat", async (req, res) => {
 
 app.post("/api/summary", async (req, res) => {
   try {
+    const groq = getGroqClient();
     const { history = [], userId } = req.body || {};
 
     if (!userId) {
@@ -1076,6 +1092,9 @@ app.post("/api/summary", async (req, res) => {
     res.json(parsed);
   } catch (error) {
     console.error("Summary error:", error);
+    if (String(error?.message || "").includes("GROQ_API_KEY is missing")) {
+      return res.status(503).json({ error: "GROQ_API_KEY is missing on backend" });
+    }
     res.status(500).json({ error: "Summary generation failed" });
   }
 });
