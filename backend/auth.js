@@ -983,3 +983,101 @@ export function updateCounsellorRequestStatus(requestId, status, handledBy) {
 
   return { success: true, request: updated };
 }
+
+export function createCounsellorSchedule(payload) {
+  const studentId = String(payload?.studentId || "").trim();
+  const counsellorEmail = String(payload?.counsellorEmail || "").trim().toLowerCase();
+  const scheduledFor = String(payload?.scheduledFor || "").trim();
+  const urgency = normalizeRequestUrgency(payload?.urgency) || "bad";
+  const notes = String(payload?.notes || "").trim();
+  const sourceRequestId = String(payload?.sourceRequestId || "").trim();
+
+  if (!studentId || !counsellorEmail || !scheduledFor) {
+    return { success: false, error: "student_id, counsellor_email, and scheduled_for are required" };
+  }
+
+  const scheduleDate = new Date(scheduledFor);
+  if (Number.isNaN(scheduleDate.getTime())) {
+    return { success: false, error: "scheduled_for must be a valid datetime" };
+  }
+
+  const counsellor = getCounsellorByEmail(counsellorEmail);
+  if (!counsellor) {
+    return { success: false, error: "Counsellor not found" };
+  }
+
+  const allowedStudents = getUsersByCounsellorInstitution(counsellor.aishe_code, counsellor.udise_code);
+  const isAllowed = allowedStudents.some((student) => String(student.id) === studentId);
+  if (!isAllowed) {
+    return { success: false, error: "Counsellor is not linked to this student" };
+  }
+
+  const id = generateHexId();
+  db.prepare(
+    `INSERT INTO counsellor_schedules (
+      id, student_id, counsellor_email, scheduled_for, urgency, notes, source_request_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    studentId,
+    counsellorEmail,
+    scheduleDate.toISOString(),
+    urgency,
+    notes || null,
+    sourceRequestId || null
+  );
+
+  if (sourceRequestId) {
+    updateCounsellorRequestStatus(sourceRequestId, "session_created", counsellorEmail);
+  }
+
+  const created = db
+    .prepare(
+      `SELECT s.*, u.username AS student_username, u.email AS student_email
+       FROM counsellor_schedules s
+       JOIN users u ON u.id = s.student_id
+       WHERE s.id = ?`
+    )
+    .get(id);
+
+  return { success: true, schedule: created };
+}
+
+export function listCounsellorSchedules(counsellorEmail, studentId = "") {
+  const normalizedCounsellorEmail = String(counsellorEmail || "").trim().toLowerCase();
+  const normalizedStudentId = String(studentId || "").trim();
+
+  if (!normalizedCounsellorEmail) {
+    return { success: false, error: "counsellor_email is required" };
+  }
+
+  const counsellor = getCounsellorByEmail(normalizedCounsellorEmail);
+  if (!counsellor) {
+    return { success: false, error: "Counsellor not found" };
+  }
+
+  if (normalizedStudentId) {
+    const rows = db
+      .prepare(
+        `SELECT s.*, u.username AS student_username, u.email AS student_email
+         FROM counsellor_schedules s
+         JOIN users u ON u.id = s.student_id
+         WHERE s.counsellor_email = ? AND s.student_id = ?
+         ORDER BY s.scheduled_for DESC`
+      )
+      .all(normalizedCounsellorEmail, normalizedStudentId);
+    return { success: true, schedules: rows };
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT s.*, u.username AS student_username, u.email AS student_email
+       FROM counsellor_schedules s
+       JOIN users u ON u.id = s.student_id
+       WHERE s.counsellor_email = ?
+       ORDER BY s.scheduled_for DESC`
+    )
+    .all(normalizedCounsellorEmail);
+
+  return { success: true, schedules: rows };
+}

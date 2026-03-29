@@ -1,4 +1,4 @@
-import { ChatMessage, CounsellorRequest, CounsellorRequestUrgency, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, SessionRecord, SessionSummary } from "../types";
+import { ChatMessage, CounsellorRequest, CounsellorRequestUrgency, CounsellorSchedule, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, SessionRecord, SessionSummary } from "../types";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
@@ -246,6 +246,55 @@ class GeminiService {
 
     const data = await res.json();
     return { request: data.request as CounsellorRequest };
+  }
+
+  async createCounsellorSchedule(payload: {
+    studentId: string;
+    counsellorEmail: string;
+    scheduledFor: string;
+    urgency: CounsellorRequestUrgency;
+    notes?: string;
+    sourceRequestId?: string;
+  }): Promise<CounsellorSchedule> {
+    const res = await fetch(`${API_BASE_URL}/api/counsellor/schedules`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        student_id: payload.studentId,
+        counsellor_email: payload.counsellorEmail,
+        scheduled_for: payload.scheduledFor,
+        urgency: payload.urgency,
+        notes: payload.notes,
+        source_request_id: payload.sourceRequestId
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Counsellor schedule create error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.schedule as CounsellorSchedule;
+  }
+
+  async fetchCounsellorSchedules(counsellorEmail: string, studentId?: string): Promise<CounsellorSchedule[]> {
+    const url = new URL(`${API_BASE_URL}/api/counsellor/schedules`);
+    url.searchParams.set("counsellor_email", counsellorEmail);
+    if (studentId) {
+      url.searchParams.set("student_id", studentId);
+    }
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Counsellor schedule list error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data.schedules) ? data.schedules : [];
   }
 
   async fetchInstitutionSummaries(collegeCode: string): Promise<SessionSummary[]> {

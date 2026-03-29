@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest } from './types.ts';
+import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest, CounsellorSchedule } from './types.ts';
 import { gemini } from './services/geminiService.ts';
 import { connectWallet, storeCidToChain } from './services/chainService.ts';
 import ChatWindow from './components/ChatWindow.tsx';
@@ -699,11 +699,73 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
   const [report, setReport] = useState<string>('');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
+  const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
+  const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [schedules, setSchedules] = useState<CounsellorSchedule[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [scheduleUrgency, setScheduleUrgency] = useState<'critical' | 'bad'>('bad');
+  const [scheduleNotes, setScheduleNotes] = useState('');
+  const [isScheduling, setIsScheduling] = useState(false);
   const [requests, setRequests] = useState<CounsellorRequest[]>([]);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [requestNotice, setRequestNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'no_sessions' | 'ready'>('ready');
+
+  const normalizedStudentSearch = studentSearch.trim().toLowerCase();
+  const filteredStudents = students.filter((student) => {
+    if (!normalizedStudentSearch) return true;
+    const name = String(student.username || '').toLowerCase();
+    const email = String(student.email || '').toLowerCase();
+    return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
+  });
+
+  const toInputDateTime = (date: Date) => {
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const loadStudentSessions = async (student: CounsellorStudent) => {
+    setSelectedStudent(student);
+    setSelectedSession(null);
+    setSessionsLoading(true);
+    try {
+      const sessions = await gemini.fetchSessions(student.id);
+      setSelectedStudentSessions(Array.isArray(sessions) ? sessions : []);
+    } catch (err) {
+      console.error('Counsellor student sessions fetch error:', err);
+      setSelectedStudentSessions([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const loadStudentSchedules = async (studentId: string) => {
+    setSchedulesLoading(true);
+    try {
+      const rows = await gemini.fetchCounsellorSchedules(user.email, studentId);
+      setSchedules(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      console.error('Counsellor schedules fetch error:', err);
+      setSchedules([]);
+    } finally {
+      setSchedulesLoading(false);
+    }
+  };
+
+  const selectStudent = async (student: CounsellorStudent) => {
+    await Promise.all([
+      loadStudentSessions(student),
+      loadStudentSchedules(student.id)
+    ]);
+    setScheduleUrgency('bad');
+    setScheduleNotes('');
+    setScheduleAt(toInputDateTime(new Date(Date.now() + 60 * 60 * 1000)));
+  };
 
   useEffect(() => {
     const fetchSummaries = async () => {
@@ -721,6 +783,8 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
           setLoading(false);
           return;
         }
+
+        await selectStudent(linkedStudents[0]);
 
         if (summaries.length === 0) { setStatus('no_sessions'); setLoading(false); return; }
         const formattedReport = await gemini.getGuardianReport(summaries);
@@ -740,15 +804,58 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
     setProcessingRequestId(request.id);
     setRequestNotice('');
     try {
-      const result = await gemini.createCounsellorSessionFromRequest(request.id, user.email);
-      setRequests((prev) => prev.map((item) => (item.id === request.id ? result.request : item)));
-      const recommendedStart = request.urgency === 'critical' ? 'within 30 minutes' : 'within 24 hours';
-      setRequestNotice(`Support session created for ${request.student_username || request.student_email || request.student_id} (${recommendedStart}).`);
+      const delayMs = request.urgency === 'critical' ? 30 * 60 * 1000 : 24 * 60 * 60 * 1000;
+      const scheduledForIso = new Date(Date.now() + delayMs).toISOString();
+
+      const scheduled = await gemini.createCounsellorSchedule({
+        studentId: request.student_id,
+        counsellorEmail: user.email,
+        scheduledFor: scheduledForIso,
+        urgency: request.urgency,
+        notes: request.reason || `Scheduled from ${request.requested_by_role} escalation request.`,
+        sourceRequestId: request.id
+      });
+
+      setRequests((prev) => prev.map((item) => (
+        item.id === request.id ? { ...item, status: 'session_created' } : item
+      )));
+
+      if (selectedStudent?.id === request.student_id) {
+        setSchedules((prev) => [scheduled, ...prev]);
+      }
+
+      setRequestNotice(`Support session scheduled for ${request.student_username || request.student_email || request.student_id}.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create support session.';
       setRequestNotice(message);
     } finally {
       setProcessingRequestId(null);
+    }
+  };
+
+  const handleScheduleForSelectedStudent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedStudent) return;
+
+    setIsScheduling(true);
+    setRequestNotice('');
+    try {
+      const scheduled = await gemini.createCounsellorSchedule({
+        studentId: selectedStudent.id,
+        counsellorEmail: user.email,
+        scheduledFor: new Date(scheduleAt).toISOString(),
+        urgency: scheduleUrgency,
+        notes: scheduleNotes
+      });
+
+      setSchedules((prev) => [scheduled, ...prev]);
+      setScheduleNotes('');
+      setRequestNotice(`Session scheduled for ${selectedStudent.username || selectedStudent.email}.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to schedule session.';
+      setRequestNotice(message);
+    } finally {
+      setIsScheduling(false);
     }
   };
 
@@ -761,7 +868,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
         </div>
         <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors p-2"><LogOut size={20} /></button>
       </nav>
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="bg-white rounded-3xl p-8 border border-teal-100 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-6">
             <h2 className="text-2xl font-serif text-slate-800">Clinical Session Report</h2>
@@ -800,6 +907,126 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
             </div>
           )}
 
+          {students.length > 0 && (
+            <div className="space-y-5 border-t border-slate-100 pt-6">
+              <h3 className="text-lg font-serif text-slate-900">Students</h3>
+              <div>
+                <input
+                  type="text"
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                  placeholder="Search students by name or email"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {filteredStudents.map((student) => (
+                  <button
+                    key={student.id}
+                    type="button"
+                    onClick={() => selectStudent(student)}
+                    className={`text-left px-4 py-3 rounded-xl border transition-colors ${selectedStudent?.id === student.id ? 'border-teal-300 bg-teal-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                  >
+                    <p className="text-sm font-semibold text-slate-800">{student.username || 'Student'}</p>
+                    <p className="text-xs text-slate-500">{student.email}</p>
+                  </button>
+                ))}
+              </div>
+              {filteredStudents.length === 0 && (
+                <p className="text-sm text-slate-500">No students match your search.</p>
+              )}
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
+                  {selectedStudent ? `Sessions - ${selectedStudent.username || selectedStudent.email}` : 'Select a student'}
+                </h4>
+
+                {sessionsLoading ? (
+                  <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
+                ) : selectedStudent ? (
+                  <SessionList
+                    sessions={selectedStudentSessions}
+                    onSelect={(session) => setSelectedSession(session)}
+                    showSummary={false}
+                  />
+                ) : (
+                  <div className="py-10 text-center text-slate-400">Choose a student to view sessions.</div>
+                )}
+              </div>
+
+              {selectedSession && (
+                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
+                  <h4 className="font-serif text-xl text-slate-900">Session Conversation</h4>
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {selectedSession.history.map((msg, index) => (
+                      <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] px-4 py-2 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'}`}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedStudent && (
+                <div className="space-y-4 border border-teal-100 rounded-2xl p-5 bg-teal-50/50">
+                  <h4 className="font-serif text-lg text-slate-900">Schedule Support Session</h4>
+                  <form onSubmit={handleScheduleForSelectedStudent} className="grid gap-3 sm:grid-cols-2">
+                    <input
+                      type="datetime-local"
+                      value={scheduleAt}
+                      onChange={(event) => setScheduleAt(event.target.value)}
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                      required
+                    />
+                    <select
+                      value={scheduleUrgency}
+                      onChange={(event) => setScheduleUrgency(event.target.value as 'critical' | 'bad')}
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                    >
+                      <option value="bad">Bad</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                    <textarea
+                      value={scheduleNotes}
+                      onChange={(event) => setScheduleNotes(event.target.value)}
+                      placeholder="Session notes or intervention plan"
+                      className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 text-sm min-h-20"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isScheduling}
+                      className="sm:col-span-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 disabled:opacity-60"
+                    >
+                      {isScheduling ? 'Scheduling...' : 'Schedule Session'}
+                    </button>
+                  </form>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Scheduled Sessions</p>
+                    {schedulesLoading ? (
+                      <p className="text-sm text-slate-500">Loading schedules...</p>
+                    ) : schedules.length === 0 ? (
+                      <p className="text-sm text-slate-500">No sessions scheduled yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {schedules.map((schedule) => (
+                          <div key={schedule.id} className="rounded-xl bg-white border border-slate-100 px-3 py-2">
+                            <p className="text-sm font-semibold text-slate-700">
+                              {new Date(schedule.scheduled_for).toLocaleString()} | {schedule.urgency.toUpperCase()}
+                            </p>
+                            {schedule.notes && <p className="text-xs text-slate-500 mt-1">{schedule.notes}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-4 border-t border-slate-100 pt-6">
             <h3 className="text-lg font-serif text-slate-900">Escalation Requests</h3>
             {requestNotice && (
@@ -833,7 +1060,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                         disabled={request.status === 'session_created' || processingRequestId === request.id}
                         className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 disabled:opacity-60"
                       >
-                        {processingRequestId === request.id ? 'Creating...' : request.status === 'session_created' ? 'Session Created' : 'Create Support Session'}
+                        {processingRequestId === request.id ? 'Scheduling...' : request.status === 'session_created' ? 'Session Created' : 'Schedule by Urgency'}
                       </button>
                     </div>
                   </div>

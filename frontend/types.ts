@@ -82,6 +82,19 @@ export interface CounsellorRequest {
   updated_at: string;
 }
 
+export interface CounsellorSchedule {
+  id: string;
+  student_id: string;
+  student_username?: string;
+  student_email?: string;
+  counsellor_email: string;
+  scheduled_for: string;
+  urgency: CounsellorRequestUrgency;
+  notes?: string;
+  source_request_id?: string;
+  created_at: string;
+}
+
 export type NetworkActorRole = 'student' | 'guardian' | 'counsellor' | 'institution';
 export type NetworkStatus = 'pending' | 'active' | 'rejected' | 'blocked';
 

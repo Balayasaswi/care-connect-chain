@@ -177,6 +177,26 @@ function initDatabase() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_status ON counsellor_requests(status)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_created_at ON counsellor_requests(created_at DESC)");
 
+  // Create counsellor schedule entries for follow-up/support sessions
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS counsellor_schedules (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      counsellor_email TEXT NOT NULL,
+      scheduled_for DATETIME NOT NULL,
+      urgency TEXT NOT NULL,
+      notes TEXT,
+      source_request_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_request_id) REFERENCES counsellor_requests(id) ON DELETE SET NULL
+    )
+  `);
+
+  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_student ON counsellor_schedules(student_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_counsellor ON counsellor_schedules(counsellor_email)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_when ON counsellor_schedules(scheduled_for DESC)");
+
   console.log("✅ Database initialized successfully");
 }
 

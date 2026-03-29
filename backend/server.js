@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
-import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus } from "./auth.js";
+import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus, createCounsellorSchedule, listCounsellorSchedules } from "./auth.js";
 
 dotenv.config();
 
@@ -846,6 +846,47 @@ app.post("/api/counsellor/requests/:requestId/create-session", (req, res) => {
   } catch (error) {
     console.error("Counsellor create-session error:", error);
     res.status(500).json({ error: "Failed to create support session" });
+  }
+});
+
+app.post("/api/counsellor/schedules", (req, res) => {
+  try {
+    const { student_id, counsellor_email, scheduled_for, urgency, notes, source_request_id } = req.body || {};
+
+    const result = createCounsellorSchedule({
+      studentId: student_id,
+      counsellorEmail: counsellor_email,
+      scheduledFor: scheduled_for,
+      urgency,
+      notes,
+      sourceRequestId: source_request_id
+    });
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ success: true, schedule: result.schedule });
+  } catch (error) {
+    console.error("Counsellor schedule create error:", error);
+    res.status(500).json({ error: "Failed to create counsellor schedule" });
+  }
+});
+
+app.get("/api/counsellor/schedules", (req, res) => {
+  try {
+    const counsellorEmail = String(req.query.counsellor_email || "").toLowerCase().trim();
+    const studentId = String(req.query.student_id || "").trim();
+
+    const result = listCounsellorSchedules(counsellorEmail, studentId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ schedules: result.schedules || [] });
+  } catch (error) {
+    console.error("Counsellor schedule list error:", error);
+    res.status(500).json({ error: "Failed to fetch counsellor schedules" });
   }
 });
 
