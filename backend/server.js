@@ -10,6 +10,14 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 const PINATA_BASE_URL = "https://api.pinata.cloud";
+const PINATA_GATEWAY_BASE = "https://gateway.pinata.cloud/ipfs";
+const IPFS_PROVIDER = String(process.env.IPFS_PROVIDER || "local").trim().toLowerCase();
+const IPFS_API_BASE = String(process.env.IPFS_API_BASE || "http://127.0.0.1:5001/api/v0").trim().replace(/\/$/, "");
+const IPFS_GATEWAY_BASE = String(process.env.IPFS_GATEWAY_BASE || "http://127.0.0.1:8080/ipfs").trim().replace(/\/$/, "");
+const IPFS_READ_GATEWAYS = String(process.env.IPFS_READ_GATEWAYS || `${IPFS_GATEWAY_BASE},${PINATA_GATEWAY_BASE}`)
+  .split(",")
+  .map((item) => item.trim().replace(/\/$/, ""))
+  .filter(Boolean);
 
 app.use(cors());
 app.use(express.json());
@@ -30,6 +38,137 @@ function getPinataAuthHeaders() {
   }
 
   return null;
+}
+
+function resolveGatewayUrl(cid, base = IPFS_GATEWAY_BASE) {
+  return `${base.replace(/\/$/, "")}/${cid}`;
+}
+
+function parseIpfsAddResponse(rawText) {
+  const lines = String(rawText || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return null;
+
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const parsed = JSON.parse(lines[i]);
+      if (parsed?.Hash) {
+        return parsed;
+      }
+    } catch {
+      // ignore malformed lines
+    }
+  }
+
+  return null;
+}
+
+async function pinJsonWithLocalIpfs(data, name = "care-connect-session") {
+  const formData = new FormData();
+  formData.append(
+    "file",
+    new Blob([JSON.stringify(data)], { type: "application/json" }),
+    `${name}.json`
+  );
+
+  const endpoint = new URL(`${IPFS_API_BASE}/add`);
+  endpoint.searchParams.set("pin", "true");
+  endpoint.searchParams.set("cid-version", "1");
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Local IPFS add failed");
+  }
+
+  const rawText = await response.text();
+  const parsed = parseIpfsAddResponse(rawText);
+  if (!parsed?.Hash) {
+    throw new Error("Local IPFS response did not contain a CID");
+  }
+
+  return {
+    cid: parsed.Hash,
+    pinSize: Number(parsed.Size) || undefined,
+    timestamp: new Date().toISOString(),
+    gatewayUrl: resolveGatewayUrl(parsed.Hash)
+  };
+}
+
+async function pinJsonWithPinata(data, name, metadata, options) {
+  const authHeaders = getPinataAuthHeaders();
+  if (!authHeaders) {
+    throw new Error("Pinata credentials not configured");
+  }
+
+  const pinataMetadata = {
+    ...(metadata && typeof metadata === "object" ? metadata : {}),
+    ...(name ? { name } : {})
+  };
+
+  const payload = {
+    pinataContent: data,
+    ...(Object.keys(pinataMetadata).length > 0 ? { pinataMetadata } : {}),
+    ...(options && typeof options === "object" ? { pinataOptions: options } : {})
+  };
+
+  const response = await fetch(`${PINATA_BASE_URL}/pinning/pinJSONToIPFS`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Pinata request failed");
+  }
+
+  const result = await response.json();
+  const cid = result.IpfsHash;
+
+  return {
+    cid,
+    pinSize: result.PinSize,
+    timestamp: result.Timestamp || new Date().toISOString(),
+    gatewayUrl: resolveGatewayUrl(cid, PINATA_GATEWAY_BASE)
+  };
+}
+
+async function pinJsonToIpfs(data, name, metadata, options) {
+  if (IPFS_PROVIDER === "pinata") {
+    return pinJsonWithPinata(data, name, metadata, options);
+  }
+
+  return pinJsonWithLocalIpfs(data, name || "care-connect-session");
+}
+
+async function fetchIpfsJson(cid) {
+  let lastError = null;
+  for (const gateway of IPFS_READ_GATEWAYS) {
+    try {
+      const response = await fetch(resolveGatewayUrl(cid, gateway));
+      if (!response.ok) continue;
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error("Unable to fetch CID from configured gateways");
 }
 
 // Create Groq client ONCE
@@ -415,9 +554,7 @@ app.get("/api/guardian/summaries", async (req, res) => {
     const summaries = [];
     for (const entry of entries) {
       try {
-        const response = await fetch(`https://gateway.pinata.cloud/ipfs/${entry.cid}`);
-        if (!response.ok) continue;
-        const payload = await response.json();
+        const payload = await fetchIpfsJson(entry.cid);
         if (payload?.summary) {
           summaries.push(payload.summary);
         }
@@ -466,9 +603,7 @@ app.get("/api/sessions", async (req, res) => {
     const sessions = [];
     for (const entry of entries) {
       try {
-        const response = await fetch(`https://gateway.pinata.cloud/ipfs/${entry.cid}`);
-        if (!response.ok) continue;
-        const payload = await response.json();
+        const payload = await fetchIpfsJson(entry.cid);
         if (!payload?.summary || !payload?.history) continue;
 
         const pinnedAt = payload.pinnedAt || entry.timestamp || new Date().toISOString();
@@ -481,7 +616,7 @@ app.get("/api/sessions", async (req, res) => {
           ipfs: {
             cid: entry.cid,
             uri: `ipfs://${entry.cid}`,
-            gatewayUrl: `https://gateway.pinata.cloud/ipfs/${entry.cid}`,
+            gatewayUrl: resolveGatewayUrl(entry.cid),
             pinnedAt
           },
           ...(onChain && onChain.txHash ? {
@@ -625,9 +760,7 @@ app.get("/api/counsellor/summaries", async (req, res) => {
       if (!entry.cid || seenCids.has(entry.cid)) continue;
       seenCids.add(entry.cid);
       try {
-        const response = await fetch(`https://gateway.pinata.cloud/ipfs/${entry.cid}`);
-        if (!response.ok) continue;
-        const payload = await response.json();
+        const payload = await fetchIpfsJson(entry.cid);
         if (payload?.summary) summaries.push(payload.summary);
       } catch (e) {
         console.warn("Counsellor summary read failed:", e.message || e);
@@ -708,9 +841,7 @@ app.get("/api/institution/summaries", async (req, res) => {
       if (!entry.cid || seenCids.has(entry.cid)) continue;
       seenCids.add(entry.cid);
       try {
-        const response = await fetch(`https://gateway.pinata.cloud/ipfs/${entry.cid}`);
-        if (!response.ok) continue;
-        const payload = await response.json();
+        const payload = await fetchIpfsJson(entry.cid);
         if (payload?.summary) summaries.push(payload.summary);
       } catch (e) {
         console.warn("Institution summary read failed:", e.message || e);
@@ -812,53 +943,23 @@ app.post("/api/summary", async (req, res) => {
   }
 });
 
-// ==================== IPFS (PINATA) ENDPOINTS ====================
+// ==================== IPFS ENDPOINTS ====================
 
 app.post("/api/ipfs/pin-json", async (req, res) => {
   try {
-    const authHeaders = getPinataAuthHeaders();
-    if (!authHeaders) {
-      return res.status(500).json({ error: "Pinata credentials not configured" });
-    }
-
     const { data, name, metadata, options } = req.body || {};
 
     if (!data || typeof data !== "object") {
       return res.status(400).json({ error: "Request must include JSON 'data'" });
     }
 
-    const pinataMetadata = {
-      ...(metadata && typeof metadata === "object" ? metadata : {}),
-      ...(name ? { name } : {})
-    };
-
-    const payload = {
-      pinataContent: data,
-      ...(Object.keys(pinataMetadata).length > 0 ? { pinataMetadata } : {}),
-      ...(options && typeof options === "object" ? { pinataOptions: options } : {})
-    };
-
-    const response = await fetch(`${PINATA_BASE_URL}/pinning/pinJSONToIPFS`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(502).json({ error: errorText || "Pinata request failed" });
-    }
-
-    const result = await response.json();
-    const cid = result.IpfsHash;
+    const pinResult = await pinJsonToIpfs(data, name, metadata, options);
+    const cid = pinResult.cid;
 
     if (data?.userId) {
       const user = getUserById(data.userId);
       const username = user?.username || "";
-      const timestamp = data?.pinnedAt || new Date().toISOString();
+      const timestamp = data?.pinnedAt || pinResult.timestamp || new Date().toISOString();
       try {
         appendIpfsCsv(data.userId, username, cid, timestamp);
       } catch (csvError) {
@@ -869,23 +970,18 @@ app.post("/api/ipfs/pin-json", async (req, res) => {
     res.json({
       cid,
       uri: `ipfs://${cid}`,
-      gatewayUrl: `https://gateway.pinata.cloud/ipfs/${cid}`,
-      pinSize: result.PinSize,
-      timestamp: result.Timestamp
+      gatewayUrl: pinResult.gatewayUrl,
+      pinSize: pinResult.pinSize,
+      timestamp: pinResult.timestamp
     });
   } catch (error) {
-    console.error("Pinata pin-json error:", error);
+    console.error("IPFS pin-json error:", error);
     res.status(500).json({ error: "Failed to pin JSON to IPFS" });
   }
 });
 
 app.post("/api/ipfs/pin-session", async (req, res) => {
   try {
-    const authHeaders = getPinataAuthHeaders();
-    if (!authHeaders) {
-      return res.status(500).json({ error: "Pinata credentials not configured" });
-    }
-
     const { sessionId, userId, summary, history, pinnedAt } = req.body || {};
     if (!sessionId || !userId || !summary || !Array.isArray(history)) {
       return res.status(400).json({ error: "sessionId, userId, summary, and history are required" });
@@ -896,32 +992,15 @@ app.post("/api/ipfs/pin-session", async (req, res) => {
     const timestamp = pinnedAt || new Date().toISOString();
 
     const payload = {
-      pinataContent: {
-        sessionId,
-        userId,
-        summary,
-        history,
-        pinnedAt: timestamp
-      },
-      pinataMetadata: { name: `care-connect-${sessionId}` }
+      sessionId,
+      userId,
+      summary,
+      history,
+      pinnedAt: timestamp
     };
 
-    const response = await fetch(`${PINATA_BASE_URL}/pinning/pinJSONToIPFS`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(502).json({ error: errorText || "Pinata request failed" });
-    }
-
-    const result = await response.json();
-    const cid = result.IpfsHash;
+    const pinResult = await pinJsonToIpfs(payload, `care-connect-${sessionId}`, { name: `care-connect-${sessionId}` });
+    const cid = pinResult.cid;
 
     try {
       appendIpfsCsv(String(userId), username, cid, timestamp);
@@ -932,12 +1011,12 @@ app.post("/api/ipfs/pin-session", async (req, res) => {
     res.json({
       cid,
       uri: `ipfs://${cid}`,
-      gatewayUrl: `https://gateway.pinata.cloud/ipfs/${cid}`,
-      pinSize: result.PinSize,
-      timestamp: result.Timestamp
+      gatewayUrl: pinResult.gatewayUrl,
+      pinSize: pinResult.pinSize,
+      timestamp: pinResult.timestamp
     });
   } catch (error) {
-    console.error("Pinata pin-session error:", error);
+    console.error("IPFS pin-session error:", error);
     const message = error instanceof Error ? error.message : "Failed to pin session to IPFS";
     res.status(500).json({ error: message });
   }

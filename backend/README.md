@@ -119,7 +119,7 @@ Content-Type: application/json
 }
 ```
 
-### IPFS (Pinata)
+### IPFS
 
 #### Pin JSON to IPFS
 ```http
@@ -145,8 +145,18 @@ npm install
 ```env
 GROQ_API_KEY=your_groq_api_key_here
 PORT=5000
-PINATA_JWT=your_pinata_jwt_here
-# Or use API key + secret instead of JWT
+HOST=0.0.0.0
+
+# IPFS mode (default: local)
+IPFS_PROVIDER=local
+IPFS_API_BASE=http://127.0.0.1:5001/api/v0
+IPFS_GATEWAY_BASE=http://127.0.0.1:8080/ipfs
+# Optional read fallback gateways (comma-separated)
+IPFS_READ_GATEWAYS=http://127.0.0.1:8080/ipfs,https://gateway.pinata.cloud/ipfs
+
+# Optional: Pinata mode if needed
+# IPFS_PROVIDER=pinata
+# PINATA_JWT=your_pinata_jwt_here
 # PINATA_API_KEY=your_pinata_api_key_here
 # PINATA_API_SECRET=your_pinata_api_secret_here
 ```
@@ -157,6 +167,23 @@ npm start
 ```
 
 The database (`care-connect.db`) will be created automatically on first run.
+
+## Local IPFS For Exhibition
+
+Run a local IPFS node (Kubo) on your laptop:
+
+1. Install Kubo from the official IPFS distributions.
+2. Initialize the node once:
+```bash
+ipfs init
+```
+3. Start daemon:
+```bash
+ipfs daemon
+```
+4. Keep daemon running while backend is running.
+
+With this setup, your backend pins and reads CIDs through your laptop node (no paid platform required).
 
 ## Tech Stack
 
