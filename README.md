@@ -83,6 +83,24 @@ Configure blockchain and service endpoints as needed.
 ./stop-demo-network.ps1
 ```
 
+## Exhibition Startup (Same College Wi-Fi)
+
+Use this one command from the repository root:
+
+```powershell
+./start-exhibition.ps1
+```
+
+What it does:
+- Starts local IPFS daemon (if installed and not already running)
+- Starts backend on `0.0.0.0:5000`
+- Starts frontend on `0.0.0.0:5173`
+- Prints your laptop LAN URL for other devices on the same Wi-Fi
+
+Requirements:
+- `ipfs` CLI (Kubo) installed for local IPFS mode
+- Firewall allows inbound ports `5000` and `5173`
+
 ## Development
 
 - **Backend**: Runs on `http://localhost:5000`
