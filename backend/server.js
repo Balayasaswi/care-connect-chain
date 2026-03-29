@@ -8,6 +8,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
 const PINATA_BASE_URL = "https://api.pinata.cloud";
 
 app.use(cors());
@@ -986,6 +987,6 @@ app.post("/api/blockchain/record", (req, res) => {
 
 
 
-app.listen(PORT, () => {
-  console.log(`✅ Backend listening on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`✅ Backend listening on http://${HOST}:${PORT}`);
 });

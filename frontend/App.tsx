@@ -1,231 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, NetworkActorRole, NetworkConnection } from './types.ts';
+import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent } from './types.ts';
 import { gemini } from './services/geminiService.ts';
 import { connectWallet, storeCidToChain } from './services/chainService.ts';
 import ChatWindow from './components/ChatWindow.tsx';
 import SessionList from './components/SessionList.tsx';
 import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle, Building2, Stethoscope } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:5000';
-
-const NetworkPanel: React.FC<{ user: User }> = ({ user }) => {
-  const [connections, setConnections] = useState<NetworkConnection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [targetStudentId, setTargetStudentId] = useState('');
-  const [inviteActorId, setInviteActorId] = useState('');
-  const [inviteActorRole, setInviteActorRole] = useState<NetworkActorRole>('guardian');
-  const [relationType, setRelationType] = useState('care-team');
-
-  const isStudent = user.role === 'student';
-  const actorRole = user.role as NetworkActorRole;
-  const actorId = isStudent ? user.id : user.email.toLowerCase().trim();
-
-  const loadConnections = async () => {
-    try {
-      setError('');
-      const list = isStudent
-        ? await gemini.fetchNetworkConnectionsByStudent(user.id)
-        : await gemini.fetchNetworkConnectionsByActor(actorId, actorRole);
-      setConnections(Array.isArray(list) ? list : []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load network connections.';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    loadConnections();
-  }, [user.id, user.email, user.role]);
-
-  const handleCreateConnection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setIsSubmitting(true);
-      setError('');
-
-      if (isStudent) {
-        if (!inviteActorId.trim()) {
-          throw new Error('Actor ID is required.');
-        }
-        await gemini.createNetworkConnectRequest({
-          studentId: user.id,
-          actorId: inviteActorId.trim(),
-          actorRole: inviteActorRole,
-          relationType: relationType.trim() || inviteActorRole
-        });
-        setInviteActorId('');
-      } else {
-        if (!targetStudentId.trim()) {
-          throw new Error('Student ID is required.');
-        }
-        await gemini.createNetworkConnectRequest({
-          studentId: targetStudentId.trim(),
-          actorId,
-          actorRole,
-          relationType: relationType.trim() || actorRole
-        });
-        setTargetStudentId('');
-      }
-
-      await loadConnections();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create connection request.';
-      setError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUpdateStatus = async (connectionId: string, status: 'active' | 'rejected' | 'blocked') => {
-    try {
-      setError('');
-      await gemini.updateNetworkConnectionStatus(connectionId, user.id, status);
-      await loadConnections();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update connection status.';
-      setError(message);
-    }
-  };
-
-  const handleDisconnect = async (connectionId: string) => {
-    try {
-      setError('');
-      await gemini.disconnectNetworkConnection(connectionId);
-      await loadConnections();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to disconnect connection.';
-      setError(message);
-    }
-  };
-
-  const pendingForStudent = connections.filter((item) => item.status === 'pending');
-
-  return (
-    <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-serif text-slate-900">Care Network</h3>
-        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-wide">
-          Links: {connections.length}
-        </span>
-      </div>
-
-      <form onSubmit={handleCreateConnection} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {isStudent ? (
-          <>
-            <input
-              type="text"
-              value={inviteActorId}
-              onChange={(e) => setInviteActorId(e.target.value)}
-              placeholder="Actor ID (email or student ID)"
-              className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
-              required
-            />
-            <select
-              value={inviteActorRole}
-              onChange={(e) => setInviteActorRole(e.target.value as NetworkActorRole)}
-              className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
-            >
-              <option value="guardian">Guardian</option>
-              <option value="counsellor">Counsellor</option>
-              <option value="institution">Institution</option>
-              <option value="student">Student</option>
-            </select>
-          </>
-        ) : (
-          <input
-            type="text"
-            value={targetStudentId}
-            onChange={(e) => setTargetStudentId(e.target.value)}
-            placeholder="Student ID"
-            className="px-3 py-2 rounded-xl border border-slate-200 text-sm sm:col-span-2"
-            required
-          />
-        )}
-
-        <input
-          type="text"
-          value={relationType}
-          onChange={(e) => setRelationType(e.target.value)}
-          placeholder="Relation type (care-team)"
-          className="px-3 py-2 rounded-xl border border-slate-200 text-sm sm:col-span-2"
-        />
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="sm:col-span-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-60"
-        >
-          {isSubmitting ? 'Submitting...' : 'Create Connection Request'}
-        </button>
-      </form>
-
-      {error && (
-        <p className="text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{error}</p>
-      )}
-
-      {loading ? (
-        <p className="text-sm text-slate-400">Loading network...</p>
-      ) : connections.length === 0 ? (
-        <p className="text-sm text-slate-500">No network links yet.</p>
-      ) : (
-        <div className="space-y-2">
-          {connections.map((item) => (
-            <div key={item.id} className="rounded-xl border border-slate-100 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium text-slate-700">
-                  Student: {item.student_id} | {item.actor_role}: {item.actor_id}
-                </p>
-                <p className="text-xs text-slate-500 uppercase tracking-wide">
-                  {item.relation_type || item.actor_role} | {item.status}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {isStudent && item.status === 'pending' && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(item.id, 'active')}
-                      className="px-2 py-1 text-xs rounded-lg bg-emerald-100 text-emerald-700 font-bold"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdateStatus(item.id, 'rejected')}
-                      className="px-2 py-1 text-xs rounded-lg bg-amber-100 text-amber-700 font-bold"
-                    >
-                      Reject
-                    </button>
-                  </>
-                )}
-                {(item.status === 'active' || item.status === 'pending') && (
-                  <button
-                    type="button"
-                    onClick={() => handleDisconnect(item.id)}
-                    className="px-2 py-1 text-xs rounded-lg bg-rose-100 text-rose-700 font-bold"
-                  >
-                    Disconnect
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {isStudent && pendingForStudent.length > 0 && (
-        <p className="text-xs text-slate-500">Pending requests awaiting your decision: {pendingForStudent.length}</p>
-      )}
-    </div>
-  );
-};
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
 
 // --- Authentication View ---
 const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
@@ -855,8 +638,6 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
             </div>
           )}
 
-          <NetworkPanel user={user} />
-
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             <Lock size={12} />
             Secure Guardian Terminal
@@ -951,8 +732,6 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
             </div>
           )}
 
-          <NetworkPanel user={user} />
-
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             <Lock size={12} />
             Secure Counsellor Terminal
@@ -1026,8 +805,6 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
               <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">{report}</pre>
             </div>
           )}
-
-          <NetworkPanel user={user} />
 
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             <Lock size={12} />
@@ -1283,7 +1060,6 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
               showSummary={false} 
             />
 
-            <NetworkPanel user={user} />
           </div>
         )}
 
