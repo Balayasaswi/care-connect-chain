@@ -853,6 +853,26 @@ app.get("/api/institution/summaries", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch summaries" });
   }
 });
+
+app.get("/api/institution/students", (req, res) => {
+  try {
+    const collegeCode = String(req.query.college_code || "").trim().toUpperCase();
+    if (!collegeCode) {
+      return res.status(400).json({ error: "college_code is required" });
+    }
+
+    const institution = getInstitutionByCollegeCode(collegeCode);
+    if (!institution) {
+      return res.status(404).json({ error: "Invalid college code" });
+    }
+
+    const students = getUsersByInstitutionCollegeCode(collegeCode);
+    res.json({ students });
+  } catch (error) {
+    console.error("Institution students error:", error);
+    res.status(500).json({ error: "Failed to fetch institution students" });
+  }
+});
 // Get guardian for a student
 app.get("/api/guardian/:studentId", (req, res) => {
   try {

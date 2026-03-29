@@ -196,6 +196,18 @@ class GeminiService {
     return Array.isArray(data.summaries) ? data.summaries : [];
   }
 
+  async fetchInstitutionStudents(collegeCode: string): Promise<CounsellorStudent[]> {
+    const url = new URL(`${API_BASE_URL}/api/institution/students`);
+    url.searchParams.set("college_code", collegeCode);
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Institution students error: ${errText}`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.students) ? data.students : [];
+  }
+
   async fetchSessions(userId: string): Promise<SessionRecord[]> {
     const url = new URL(`${API_BASE_URL}/api/sessions`);
     url.searchParams.set("user_id", userId);

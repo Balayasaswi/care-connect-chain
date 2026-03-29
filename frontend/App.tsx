@@ -745,15 +745,54 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
 const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<'not_found' | 'no_sessions' | 'ready'>('ready');
+  const [status, setStatus] = useState<'not_found' | 'no_students' | 'no_sessions' | 'ready'>('ready');
+  const [students, setStudents] = useState<CounsellorStudent[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
+  const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
+
+  const loadStudentSessions = async (student: CounsellorStudent) => {
+    setSelectedStudent(student);
+    setSelectedSession(null);
+    setSessionsLoading(true);
+    try {
+      const sessions = await gemini.fetchSessions(student.id);
+      setSelectedStudentSessions(Array.isArray(sessions) ? sessions : []);
+    } catch (err) {
+      console.error('Institution student sessions fetch error:', err);
+      setSelectedStudentSessions([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchSummaries = async () => {
       try {
         const collegeCode = user.collegeCode || '';
         if (!collegeCode) { setStatus('not_found'); setLoading(false); return; }
-        const summaries = await gemini.fetchInstitutionSummaries(collegeCode);
-        if (summaries.length === 0) { setStatus('no_sessions'); setLoading(false); return; }
+        const [linkedStudents, summaries] = await Promise.all([
+          gemini.fetchInstitutionStudents(collegeCode),
+          gemini.fetchInstitutionSummaries(collegeCode)
+        ]);
+
+        setStudents(linkedStudents);
+
+        if (linkedStudents.length === 0) {
+          setStatus('no_students');
+          setLoading(false);
+          return;
+        }
+
+        await loadStudentSessions(linkedStudents[0]);
+
+        if (summaries.length === 0) {
+          setStatus('no_sessions');
+          setLoading(false);
+          return;
+        }
+
         const formattedReport = await gemini.getGuardianReport(summaries);
         setReport(formattedReport);
         setStatus('ready');
@@ -794,6 +833,11 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
               <AlertCircle className="mx-auto text-rose-300" size={48} />
               <p className="text-slate-600 font-medium">Institution Not Found</p>
             </div>
+          ) : status === 'no_students' ? (
+            <div className="py-12 text-center space-y-4">
+              <Users className="mx-auto text-slate-300" size={48} />
+              <p className="text-slate-600 font-medium">No Students Linked To This Institution</p>
+            </div>
           ) : status === 'no_sessions' ? (
             <div className="py-12 text-center space-y-4">
               <History className="mx-auto text-slate-300" size={48} />
@@ -802,6 +846,58 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
           ) : (
             <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100">
               <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">{report}</pre>
+            </div>
+          )}
+
+          {students.length > 0 && (
+            <div className="space-y-5 border-t border-slate-100 pt-6">
+              <h3 className="text-lg font-serif text-slate-900">Students</h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {students.map((student) => (
+                  <button
+                    key={student.id}
+                    type="button"
+                    onClick={() => loadStudentSessions(student)}
+                    className={`text-left px-4 py-3 rounded-xl border transition-colors ${selectedStudent?.id === student.id ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                  >
+                    <p className="text-sm font-semibold text-slate-800">{student.username || 'Student'}</p>
+                    <p className="text-xs text-slate-500">{student.email}</p>
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
+                  {selectedStudent ? `Sessions - ${selectedStudent.username || selectedStudent.email}` : 'Select a student'}
+                </h4>
+
+                {sessionsLoading ? (
+                  <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
+                ) : selectedStudent ? (
+                  <SessionList
+                    sessions={selectedStudentSessions}
+                    onSelect={(session) => setSelectedSession(session)}
+                    showSummary={false}
+                  />
+                ) : (
+                  <div className="py-10 text-center text-slate-400">Choose a student to view sessions.</div>
+                )}
+              </div>
+
+              {selectedSession && (
+                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
+                  <h4 className="font-serif text-xl text-slate-900">Session Conversation</h4>
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                    {selectedSession.history.map((msg, index) => (
+                      <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] px-4 py-2 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'}`}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
