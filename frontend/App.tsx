@@ -747,10 +747,19 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'no_sessions' | 'ready'>('ready');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
+  const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
+
+  const normalizedStudentSearch = studentSearch.trim().toLowerCase();
+  const filteredStudents = students.filter((student) => {
+    if (!normalizedStudentSearch) return true;
+    const name = String(student.username || '').toLowerCase();
+    const email = String(student.email || '').toLowerCase();
+    return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
+  });
 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
@@ -852,8 +861,17 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
           {students.length > 0 && (
             <div className="space-y-5 border-t border-slate-100 pt-6">
               <h3 className="text-lg font-serif text-slate-900">Students</h3>
+              <div>
+                <input
+                  type="text"
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                  placeholder="Search students by name or email"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                {students.map((student) => (
+                {filteredStudents.map((student) => (
                   <button
                     key={student.id}
                     type="button"
@@ -865,6 +883,9 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                   </button>
                 ))}
               </div>
+              {filteredStudents.length === 0 && (
+                <p className="text-sm text-slate-500">No students match your search.</p>
+              )}
 
               <div className="space-y-4">
                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
