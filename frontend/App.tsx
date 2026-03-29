@@ -217,15 +217,14 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
         } else {
           const loginResult = await postJson(`${API_BASE_URL}/api/guardian/login`, {
             guardian_email: sanitizedGuardianEmail,
-            guardian_password: guardianPassword,
-            ...(sanitizedStudentEmail ? { student_email: sanitizedStudentEmail } : {})
+            guardian_password: guardianPassword
           });
 
           onLogin({
             id: loginResult.studentId,
             email: sanitizedGuardianEmail,
             role: 'guardian',
-            studentEmail: loginResult.studentEmail || sanitizedStudentEmail,
+            studentEmail: loginResult.studentEmail,
             studentId: loginResult.studentId
           });
         }

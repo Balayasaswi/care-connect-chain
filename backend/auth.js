@@ -475,6 +475,15 @@ export function addGuardian(studentId, guardianData) {
 
 export async function registerGuardian(studentId, guardianEmail, guardianPassword, relationship) {
   try {
+    const existingLinks = getGuardiansByEmail(guardianEmail);
+    const linkedToOtherStudent = existingLinks.find(
+      (record) => String(record.student_id) !== String(studentId)
+    );
+
+    if (linkedToOtherStudent) {
+      return { success: false, error: "Guardian email is already linked to another student" };
+    }
+
     const hashedPassword = await hashPassword(guardianPassword);
     const guardianName = guardianEmail;
 

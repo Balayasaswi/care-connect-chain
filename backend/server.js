@@ -349,41 +349,28 @@ app.post("/api/guardian/register", async (req, res) => {
 
 app.post("/api/guardian/login", async (req, res) => {
   try {
-    const { guardian_email, guardian_password, student_email } = req.body || {};
+    const { guardian_email, guardian_password } = req.body || {};
 
     if (!guardian_email || !guardian_password) {
       return res.status(400).json({ error: "guardian_email and guardian_password are required" });
     }
 
     const normalizedGuardianEmail = String(guardian_email).toLowerCase().trim();
-    const normalizedStudentEmail = String(student_email || "").toLowerCase().trim();
 
-    let studentId = "";
-    let studentEmail = normalizedStudentEmail;
-
-    if (normalizedStudentEmail) {
-      const student = getUserByEmail(normalizedStudentEmail);
-      if (!student) {
-        return res.status(404).json({ error: "Student not found" });
-      }
-      studentId = student.id;
-      studentEmail = student.email;
-    } else {
-      const guardians = getGuardiansByEmail(normalizedGuardianEmail);
-      if (!guardians.length) {
-        return res.status(404).json({ error: "Guardian not found" });
-      }
-      if (guardians.length > 1) {
-        return res.status(400).json({ error: "Multiple student links found for this guardian. Please provide student_email." });
-      }
-
-      studentId = guardians[0].student_id;
-      const student = getUserById(studentId);
-      if (!student) {
-        return res.status(404).json({ error: "Linked student not found" });
-      }
-      studentEmail = student.email;
+    const guardians = getGuardiansByEmail(normalizedGuardianEmail);
+    if (!guardians.length) {
+      return res.status(404).json({ error: "Guardian not found" });
     }
+    if (guardians.length > 1) {
+      return res.status(409).json({ error: "Guardian email is linked to multiple students. Contact admin support." });
+    }
+
+    const studentId = guardians[0].student_id;
+    const student = getUserById(studentId);
+    if (!student) {
+      return res.status(404).json({ error: "Linked student not found" });
+    }
+    const studentEmail = student.email;
 
     const result = await loginGuardian(
       studentId,
