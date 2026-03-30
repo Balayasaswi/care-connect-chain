@@ -1335,50 +1335,6 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
               {filteredStudents.length === 0 && (
                 <p className="text-sm text-slate-500">No students match your search.</p>
               )}
-
-              <div className="space-y-4">
-                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
-                  {selectedStudent ? `Sessions - ${selectedStudent.username || selectedStudent.email}` : 'Select a student'}
-                </h4>
-                {requestNotice && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
-                    {requestNotice}
-                  </div>
-                )}
-
-                {sessionsLoading ? (
-                  <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
-                ) : selectedStudent ? (
-                  <div className="space-y-4">
-                    <div className="border-b border-slate-100 pb-4">
-                      <h4 className="text-xl font-serif text-slate-800">Student Progress Report</h4>
-                      <div className="flex gap-3 mt-2 flex-wrap">
-                        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
-                          STUDENT: {selectedStudent.email}
-                        </span>
-                        <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-widest">
-                          PRIVATE DATA PROTECTED
-                        </span>
-                      </div>
-                    </div>
-
-                    {selectedStudentSessions.length === 0 ? (
-                      <SessionSummaryRows sessions={selectedStudentSessions} onReport={handleRequestCounsellor} reportingSessionId={requestingSessionId} />
-                    ) : (
-                      <>
-                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                          <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">
-                            {selectedStudentReport}
-                          </pre>
-                        </div>
-                        <SessionSummaryRows sessions={selectedStudentSessions} onReport={handleRequestCounsellor} reportingSessionId={requestingSessionId} />
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="py-10 text-center text-slate-400">Choose a student to view sessions.</div>
-                )}
-              </div>
             </div>
           )}
 
