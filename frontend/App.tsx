@@ -1136,6 +1136,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'ready'>('ready');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
+  const [view, setView] = useState<'students' | 'student_summaries'>('students');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -1153,6 +1154,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
+    setView('student_summaries');
     setSessionsLoading(true);
     setRequestNotice('');
     try {
@@ -1246,13 +1248,32 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
       <main className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-3xl p-8 border border-amber-100 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-6">
-            <h2 className="text-2xl font-serif text-slate-800">Student Wellbeing Overview</h2>
-            <div className="flex flex-wrap gap-3 mt-2">
-              <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">ALL STUDENTS</span>
-              {user.institutionName && <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">{user.institutionName}</span>}
-              {user.collegeCode && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">COLLEGE CODE: {user.collegeCode}</span>}
-              <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-1 rounded font-bold uppercase tracking-widest">ADMIN VIEW</span>
-            </div>
+            {view === 'students' ? (
+              <>
+                <h2 className="text-2xl font-serif text-slate-800">Student Wellbeing Overview</h2>
+                <div className="flex flex-wrap gap-3 mt-2">
+                  <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">ALL STUDENTS</span>
+                  {user.institutionName && <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">{user.institutionName}</span>}
+                  {user.collegeCode && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">COLLEGE CODE: {user.collegeCode}</span>}
+                  <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-1 rounded font-bold uppercase tracking-widest">ADMIN VIEW</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setView('students')}
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-700 hover:text-amber-800"
+                >
+                  <ChevronLeft size={14} />
+                  Back to Students
+                </button>
+                <h2 className="text-2xl font-serif text-slate-800 mt-3">
+                  {selectedStudent?.username || selectedStudent?.email || 'Student'} Summaries
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">Institution view: summary-only records</p>
+              </>
+            )}
           </div>
           {loading ? (
             <div className="py-20 text-center text-slate-400">Loading wellbeing data...</div>
@@ -1268,7 +1289,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
             </div>
           ) : null}
 
-          {students.length > 0 && (
+          {students.length > 0 && view === 'students' && (
             <div className="space-y-5 border-t border-slate-100 pt-6">
               <h3 className="text-lg font-serif text-slate-900">Students</h3>
               <div>
@@ -1358,6 +1379,43 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                   <div className="py-10 text-center text-slate-400">Choose a student to view sessions.</div>
                 )}
               </div>
+            </div>
+          )}
+
+          {view === 'student_summaries' && selectedStudent && (
+            <div className="space-y-5 border-t border-slate-100 pt-6">
+              {requestNotice && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                  {requestNotice}
+                </div>
+              )}
+
+              {sessionsLoading ? (
+                <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-100 pb-4">
+                    <h4 className="text-xl font-serif text-slate-800">Student Progress Report</h4>
+                    <div className="flex gap-3 mt-2 flex-wrap">
+                      <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                        STUDENT: {selectedStudent.email}
+                      </span>
+                      <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-widest">
+                        PRIVATE DATA PROTECTED
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedStudentSessions.length > 0 && (
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                      <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">
+                        {selectedStudentReport}
+                      </pre>
+                    </div>
+                  )}
+                  <SessionSummaryRows sessions={selectedStudentSessions} onReport={handleRequestCounsellor} reportingSessionId={requestingSessionId} />
+                </div>
+              )}
             </div>
           )}
 
