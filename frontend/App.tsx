@@ -561,6 +561,57 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
   );
 };
 
+const SessionSummaryRows: React.FC<{
+  sessions: SessionRecord[];
+  onReport: (session: SessionRecord) => void;
+  reportingSessionId?: string | null;
+}> = ({ sessions, onReport, reportingSessionId }) => {
+  const formatDate = (session: SessionRecord) => {
+    const raw = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return 'Date unavailable';
+    return date.toLocaleString();
+  };
+
+  if (!sessions.length) {
+    return (
+      <div className="py-10 text-center space-y-3">
+        <History className="mx-auto text-slate-300" size={42} />
+        <p className="text-slate-600 font-medium">No Active Sessions</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-white overflow-hidden">
+      {sessions.map((session) => {
+        const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
+        const canReport = emotion === 'BAD' || emotion === 'CRITICAL';
+        return (
+          <div key={session.id} className="px-4 py-4 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 truncate">{session.summary?.summary || 'Session summary unavailable.'}</p>
+              <p className="text-xs text-slate-500 mt-1">{formatDate(session)} | {emotion}</p>
+            </div>
+            <div className="shrink-0">
+              {canReport && (
+                <button
+                  type="button"
+                  onClick={() => onReport(session)}
+                  disabled={reportingSessionId === session.id}
+                  className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {reportingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // --- Guardian View ---
 const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
   const [report, setReport] = useState<string>('');
@@ -674,18 +725,13 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 
           {sessions.length > 0 && (
             <div className="space-y-4">
-              <h3 className="font-serif text-xl text-slate-800">Session Cards</h3>
+              <h3 className="font-serif text-xl text-slate-800">Session Summaries</h3>
               {requestNotice && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
                   {requestNotice}
                 </div>
               )}
-              <SessionList
-                sessions={sessions}
-                onSelect={() => undefined}
-                onRequestCounsellor={handleRequestCounsellor}
-                requestingSessionId={requestingSessionId}
-              />
+              <SessionSummaryRows sessions={sessions} onReport={handleRequestCounsellor} reportingSessionId={requestingSessionId} />
             </div>
           )}
 
@@ -1103,6 +1149,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     const email = String(student.email || '').toLowerCase();
     return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
   });
+  const recommendedStudents = filteredStudents.slice(0, 5);
 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
@@ -1233,6 +1280,24 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Recommended Students</p>
+                <div className="flex flex-wrap gap-2">
+                  {recommendedStudents.map((student) => (
+                    <button
+                      key={`rec_${student.id}`}
+                      type="button"
+                      onClick={() => loadStudentSessions(student)}
+                      className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold hover:bg-amber-100"
+                    >
+                      {student.username || student.email}
+                    </button>
+                  ))}
+                  {recommendedStudents.length === 0 && (
+                    <span className="text-xs text-slate-500">No recommendations for this search.</span>
+                  )}
+                </div>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {filteredStudents.map((student) => (
                   <button
@@ -1277,10 +1342,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                     </div>
 
                     {selectedStudentSessions.length === 0 ? (
-                      <div className="py-10 text-center space-y-3">
-                        <History className="mx-auto text-slate-300" size={42} />
-                        <p className="text-slate-600 font-medium">No Active Sessions</p>
-                      </div>
+                      <SessionSummaryRows sessions={selectedStudentSessions} onReport={handleRequestCounsellor} reportingSessionId={requestingSessionId} />
                     ) : (
                       <>
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
@@ -1288,12 +1350,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                             {selectedStudentReport}
                           </pre>
                         </div>
-                        <SessionList
-                          sessions={selectedStudentSessions}
-                          onSelect={() => undefined}
-                          onRequestCounsellor={handleRequestCounsellor}
-                          requestingSessionId={requestingSessionId}
-                        />
+                        <SessionSummaryRows sessions={selectedStudentSessions} onReport={handleRequestCounsellor} reportingSessionId={requestingSessionId} />
                       </>
                     )}
                   </div>
