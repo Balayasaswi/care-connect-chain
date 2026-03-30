@@ -1085,9 +1085,9 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
 
 // --- Institution Dashboard ---
 const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
-  const [report, setReport] = useState<string>('');
+  const [selectedStudentReport, setSelectedStudentReport] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<'not_found' | 'no_students' | 'no_sessions' | 'ready'>('ready');
+  const [status, setStatus] = useState<'not_found' | 'no_students' | 'ready'>('ready');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
@@ -1107,15 +1107,29 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
     setSessionsLoading(true);
+    setRequestNotice('');
     try {
       const sessions = await gemini.fetchSessions(student.id, {
         actorRole: 'institution',
         collegeCode: user.collegeCode
       });
-      setSelectedStudentSessions(Array.isArray(sessions) ? sessions : []);
+      const normalized = Array.isArray(sessions) ? sessions : [];
+      setSelectedStudentSessions(normalized);
+
+      const summaries = normalized
+        .map((session) => session.summary)
+        .filter((summary) => Boolean(summary));
+
+      if (summaries.length) {
+        const report = await gemini.getGuardianReport(summaries);
+        setSelectedStudentReport(report);
+      } else {
+        setSelectedStudentReport('');
+      }
     } catch (err) {
       console.error('Institution student sessions fetch error:', err);
       setSelectedStudentSessions([]);
+      setSelectedStudentReport('');
     } finally {
       setSessionsLoading(false);
     }
@@ -1126,10 +1140,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
       try {
         const collegeCode = user.collegeCode || '';
         if (!collegeCode) { setStatus('not_found'); setLoading(false); return; }
-        const [linkedStudents, summaries] = await Promise.all([
-          gemini.fetchInstitutionStudents(collegeCode),
-          gemini.fetchInstitutionSummaries(collegeCode)
-        ]);
+        const linkedStudents = await gemini.fetchInstitutionStudents(collegeCode);
 
         setStudents(linkedStudents);
 
@@ -1140,15 +1151,6 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
         }
 
         await loadStudentSessions(linkedStudents[0]);
-
-        if (summaries.length === 0) {
-          setStatus('no_sessions');
-          setLoading(false);
-          return;
-        }
-
-        const formattedReport = await gemini.getGuardianReport(summaries);
-        setReport(formattedReport);
         setStatus('ready');
       } catch (err) {
         console.error('Institution fetch error:', err);
@@ -1217,16 +1219,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
               <Users className="mx-auto text-slate-300" size={48} />
               <p className="text-slate-600 font-medium">No Students Linked To This Institution</p>
             </div>
-          ) : status === 'no_sessions' ? (
-            <div className="py-12 text-center space-y-4">
-              <History className="mx-auto text-slate-300" size={48} />
-              <p className="text-slate-600 font-medium">No Activity Recorded Yet</p>
-            </div>
-          ) : (
-            <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100">
-              <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">{report}</pre>
-            </div>
-          )}
+          ) : null}
 
           {students.length > 0 && (
             <div className="space-y-5 border-t border-slate-100 pt-6">
@@ -1270,12 +1263,40 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                 {sessionsLoading ? (
                   <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
                 ) : selectedStudent ? (
-                  <SessionList
-                    sessions={selectedStudentSessions}
-                    onSelect={() => undefined}
-                    onRequestCounsellor={handleRequestCounsellor}
-                    requestingSessionId={requestingSessionId}
-                  />
+                  <div className="space-y-4">
+                    <div className="border-b border-slate-100 pb-4">
+                      <h4 className="text-xl font-serif text-slate-800">Student Progress Report</h4>
+                      <div className="flex gap-3 mt-2 flex-wrap">
+                        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                          STUDENT: {selectedStudent.email}
+                        </span>
+                        <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-widest">
+                          PRIVATE DATA PROTECTED
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedStudentSessions.length === 0 ? (
+                      <div className="py-10 text-center space-y-3">
+                        <History className="mx-auto text-slate-300" size={42} />
+                        <p className="text-slate-600 font-medium">No Active Sessions</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                          <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">
+                            {selectedStudentReport}
+                          </pre>
+                        </div>
+                        <SessionList
+                          sessions={selectedStudentSessions}
+                          onSelect={() => undefined}
+                          onRequestCounsellor={handleRequestCounsellor}
+                          requestingSessionId={requestingSessionId}
+                        />
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <div className="py-10 text-center text-slate-400">Choose a student to view sessions.</div>
                 )}
