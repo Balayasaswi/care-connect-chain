@@ -1025,11 +1025,22 @@ app.get("/api/guardian/:studentId", (req, res) => {
 // Chat endpoint
 app.post("/api/chat", async (req, res) => {
   try {
-    const groq = getGroqClient();
     const { history = [], message, systemInstruction } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
+    }
+
+    let groq;
+    try {
+      groq = getGroqClient();
+    } catch (clientError) {
+      if (String(clientError?.message || "").includes("GROQ_API_KEY is missing")) {
+        return res.json({
+          text: "I can still support you in local mode. Tell me what you are feeling right now, and I will help you break it down into small next steps."
+        });
+      }
+      throw clientError;
     }
 
     // Build conversation text safely
