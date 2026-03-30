@@ -1472,6 +1472,17 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         };
       } catch (ipfsError) {
         console.error("IPFS pin error:", ipfsError);
+        try {
+          await gemini.archiveSession({
+            sessionId,
+            userId: user.id,
+            summary,
+            history,
+            pinnedAt: new Date().toISOString()
+          });
+        } catch (archiveError) {
+          console.error("Session archive error:", archiveError);
+        }
       }
 
       const newSession: SessionRecord = {

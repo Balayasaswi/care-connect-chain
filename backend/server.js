@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
-import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus, createCounsellorSchedule, listCounsellorSchedules } from "./auth.js";
+import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus, createCounsellorSchedule, listCounsellorSchedules, saveSessionArchive, getSessionArchivesByStudent } from "./auth.js";
 
 dotenv.config();
 
@@ -561,19 +561,27 @@ app.get("/api/guardian/summaries", async (req, res) => {
     }
 
     const entries = readIpfsEntriesByStudent(studentId);
-    if (!entries.length) {
-      return res.json({ summaries: [] });
-    }
+    const archivedSessions = getSessionArchivesByStudent(studentId);
 
     const summaries = [];
-    for (const entry of entries) {
-      try {
-        const payload = await fetchIpfsJson(entry.cid);
-        if (payload?.summary) {
-          summaries.push(payload.summary);
+    if (entries.length) {
+      for (const entry of entries) {
+        try {
+          const payload = await fetchIpfsJson(entry.cid);
+          if (payload?.summary) {
+            summaries.push(payload.summary);
+          }
+        } catch (decryptError) {
+          console.warn("Guardian summary read failed:", decryptError.message || decryptError);
         }
-      } catch (decryptError) {
-        console.warn("Guardian summary read failed:", decryptError.message || decryptError);
+      }
+    }
+
+    if (!summaries.length && archivedSessions.length) {
+      for (const session of archivedSessions) {
+        if (session?.summary) {
+          summaries.push(session.summary);
+        }
       }
     }
 
@@ -600,6 +608,7 @@ app.get("/api/sessions", async (req, res) => {
     const entries = readIpfsEntriesByStudent(userId)
       .filter((entry) => entry?.cid)
       .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
+    const archivedSessions = getSessionArchivesByStudent(userId);
 
     const blockchainEntries = readBlockchainEntriesByStudent(userId);
     const onChainByCid = new Map();
@@ -610,40 +619,67 @@ app.get("/api/sessions", async (req, res) => {
       }
     }
 
-    if (!entries.length) {
-      return res.json({ sessions: [] });
+    const sessions = [];
+    if (entries.length) {
+      for (const entry of entries) {
+        try {
+          const payload = await fetchIpfsJson(entry.cid);
+          if (!payload?.summary || !payload?.history) continue;
+
+          const pinnedAt = payload.pinnedAt || entry.timestamp || new Date().toISOString();
+          const onChain = onChainByCid.get(entry.cid);
+          sessions.push({
+            id: payload.sessionId || `ipfs_${entry.cid}`,
+            summary: payload.summary,
+            history: payload.history,
+            status: "completed",
+            ipfs: {
+              cid: entry.cid,
+              uri: `ipfs://${entry.cid}`,
+              gatewayUrl: resolveGatewayUrl(entry.cid),
+              pinnedAt
+            },
+            ...(onChain && onChain.txHash ? {
+              onChain: {
+                txHash: onChain.txHash,
+                chainId: Number(onChain.chainId) || 0,
+                contractAddress: onChain.contractAddress || "",
+                storedAt: onChain.timestamp || pinnedAt
+              }
+            } : {})
+          });
+        } catch (sessionError) {
+          console.warn("Session fetch failed:", sessionError.message || sessionError);
+        }
+      }
     }
 
-    const sessions = [];
-    for (const entry of entries) {
-      try {
-        const payload = await fetchIpfsJson(entry.cid);
-        if (!payload?.summary || !payload?.history) continue;
-
-        const pinnedAt = payload.pinnedAt || entry.timestamp || new Date().toISOString();
-        const onChain = onChainByCid.get(entry.cid);
+    if (!sessions.length && archivedSessions.length) {
+      for (const archived of archivedSessions) {
+        const cid = String(archived.cid || "").trim();
+        const onChain = cid ? onChainByCid.get(cid) : null;
         sessions.push({
-          id: payload.sessionId || `ipfs_${entry.cid}`,
-          summary: payload.summary,
-          history: payload.history,
+          id: archived.id,
+          summary: archived.summary,
+          history: archived.history,
           status: "completed",
-          ipfs: {
-            cid: entry.cid,
-            uri: `ipfs://${entry.cid}`,
-            gatewayUrl: resolveGatewayUrl(entry.cid),
-            pinnedAt
-          },
+          ...(cid ? {
+            ipfs: {
+              cid,
+              uri: `ipfs://${cid}`,
+              gatewayUrl: resolveGatewayUrl(cid),
+              pinnedAt: archived.pinnedAt || new Date().toISOString()
+            }
+          } : {}),
           ...(onChain && onChain.txHash ? {
             onChain: {
               txHash: onChain.txHash,
               chainId: Number(onChain.chainId) || 0,
               contractAddress: onChain.contractAddress || "",
-              storedAt: onChain.timestamp || ""
+              storedAt: onChain.timestamp || archived.pinnedAt || new Date().toISOString()
             }
           } : {})
         });
-      } catch (sessionError) {
-        console.warn("Session fetch failed:", sessionError.message || sessionError);
       }
     }
 
@@ -1178,6 +1214,18 @@ app.post("/api/ipfs/pin-session", async (req, res) => {
       console.warn("IPFS CSV append failed:", csvError.message);
     }
 
+    const archiveResult = saveSessionArchive({
+      sessionId,
+      studentId: String(userId),
+      summary,
+      history,
+      cid,
+      pinnedAt: timestamp
+    });
+    if (!archiveResult.success) {
+      console.warn("Session archive save failed:", archiveResult.error);
+    }
+
     res.json({
       cid,
       uri: `ipfs://${cid}`,
@@ -1189,6 +1237,33 @@ app.post("/api/ipfs/pin-session", async (req, res) => {
     console.error("IPFS pin-session error:", error);
     const message = error instanceof Error ? error.message : "Failed to pin session to IPFS";
     res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/sessions/archive", (req, res) => {
+  try {
+    const { sessionId, userId, summary, history, pinnedAt, cid } = req.body || {};
+    if (!sessionId || !userId || !summary || !Array.isArray(history)) {
+      return res.status(400).json({ error: "sessionId, userId, summary, and history are required" });
+    }
+
+    const result = saveSessionArchive({
+      sessionId: String(sessionId),
+      studentId: String(userId),
+      summary,
+      history,
+      cid: cid ? String(cid) : null,
+      pinnedAt: pinnedAt ? String(pinnedAt) : null
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || "Failed to archive session" });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Session archive error:", error);
+    res.status(500).json({ error: "Failed to archive session" });
   }
 });
 

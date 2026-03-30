@@ -197,6 +197,23 @@ function initDatabase() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_counsellor ON counsellor_schedules(counsellor_email)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_when ON counsellor_schedules(scheduled_for DESC)");
 
+  // Create session archive table for non-IPFS fallback retrieval
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_archives (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      summary_json TEXT NOT NULL,
+      history_json TEXT NOT NULL,
+      cid TEXT,
+      pinned_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.exec("CREATE INDEX IF NOT EXISTS idx_session_archives_student ON session_archives(student_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_session_archives_created ON session_archives(created_at DESC)");
+
   console.log("✅ Database initialized successfully");
 }
 

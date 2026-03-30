@@ -147,6 +147,81 @@ export function readAllIpfsEntries() {
   return entries;
 }
 
+export function saveSessionArchive({ sessionId, studentId, summary, history, cid, pinnedAt }) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedStudentId = String(studentId || "").trim();
+
+  if (!normalizedSessionId || !normalizedStudentId) {
+    return { success: false, error: "sessionId and studentId are required" };
+  }
+
+  try {
+    db.prepare(
+      `INSERT INTO session_archives (id, student_id, summary_json, history_json, cid, pinned_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         student_id = excluded.student_id,
+         summary_json = excluded.summary_json,
+         history_json = excluded.history_json,
+         cid = excluded.cid,
+         pinned_at = excluded.pinned_at`
+    ).run(
+      normalizedSessionId,
+      normalizedStudentId,
+      JSON.stringify(summary || {}),
+      JSON.stringify(Array.isArray(history) ? history : []),
+      cid || null,
+      pinnedAt || null
+    );
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export function getSessionArchivesByStudent(studentId) {
+  const normalizedStudentId = String(studentId || "").trim();
+  if (!normalizedStudentId) return [];
+
+  const rows = db
+    .prepare(
+      `SELECT id, student_id, summary_json, history_json, cid, pinned_at, created_at
+       FROM session_archives
+       WHERE student_id = ?
+       ORDER BY COALESCE(pinned_at, created_at) DESC`
+    )
+    .all(normalizedStudentId);
+
+  return rows.map((row) => {
+    let summary = {};
+    let history = [];
+
+    try {
+      summary = JSON.parse(row.summary_json || "{}");
+    } catch {
+      summary = {};
+    }
+
+    try {
+      const parsedHistory = JSON.parse(row.history_json || "[]");
+      history = Array.isArray(parsedHistory) ? parsedHistory : [];
+    } catch {
+      history = [];
+    }
+
+    return {
+      id: row.id,
+      studentId: row.student_id,
+      summary,
+      history,
+      cid: row.cid || "",
+      pinnedAt: row.pinned_at || row.created_at || "",
+      createdAt: row.created_at || ""
+    };
+  });
+}
+
 function ensureBlockchainCsvSchema() {
   fs.mkdirSync(exportsDir, { recursive: true });
   const header = [

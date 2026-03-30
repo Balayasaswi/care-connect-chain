@@ -122,6 +122,23 @@ class GeminiService {
     return res.json();
   }
 
+  async archiveSession(payload: SessionPinPayload & { cid?: string }): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE_URL}/api/sessions/archive`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Session archive error: ${errText}`);
+    }
+
+    return res.json();
+  }
+
   async recordBlockchainTx(payload: BlockchainRecordPayload): Promise<{ success: boolean }> {
     const res = await fetch(`${API_BASE_URL}/api/blockchain/record`, {
       method: "POST",
