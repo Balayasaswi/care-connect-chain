@@ -1212,6 +1212,20 @@ app.post("/api/blockchain/record", (req, res) => {
 
 
 
-app.listen(PORT, HOST, () => {
+const httpServer = app.listen(PORT, HOST, () => {
   console.log(`✅ Backend listening on http://${HOST}:${PORT}`);
 });
+
+// In some Windows terminal/tooling setups, the process can exit early even after listen.
+// Keep one ref'ed handle so the API stays alive for interactive testing.
+const keepAliveInterval = setInterval(() => {
+  // no-op
+}, 60 * 1000);
+
+const shutdown = () => {
+  clearInterval(keepAliveInterval);
+  httpServer.close(() => process.exit(0));
+};
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
