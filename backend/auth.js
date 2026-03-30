@@ -306,6 +306,12 @@ function normalizeAccessCode(accessCode) {
   return trimmed.toUpperCase();
 }
 
+function normalizeCollegeCode(collegeCode) {
+  const trimmed = String(collegeCode || "").trim();
+  if (!trimmed) return "";
+  return trimmed.toUpperCase();
+}
+
 function getInstitutionByAccessCode(accessCode) {
   const normalized = normalizeAccessCode(accessCode);
   if (!normalized) return null;
@@ -317,10 +323,39 @@ function getInstitutionByAccessCode(accessCode) {
   ).get(normalized, normalized);
 }
 
-export async function registerUser(username, email, password, accessCode) {
+function getInstitutionByCollegeCodeRaw(collegeCode) {
+  const normalized = normalizeCollegeCode(collegeCode);
+  if (!normalized) return null;
+
+  return db.prepare(
+    `SELECT institution_email, college_code, aishe_code, udise_code
+     FROM institutions_global
+     WHERE UPPER(COALESCE(college_code, '')) = ?`
+  ).get(normalized);
+}
+
+export async function registerUser(username, email, password, { accessCode, collegeCode } = {}) {
   try {
-    const normalizedCode = normalizeAccessCode(accessCode);
-    const institution = getInstitutionByAccessCode(normalizedCode);
+    const normalizedCollegeCode = normalizeCollegeCode(collegeCode);
+    let normalizedCode = normalizeAccessCode(accessCode);
+    let institution = null;
+
+    if (normalizedCollegeCode) {
+      institution = getInstitutionByCollegeCodeRaw(normalizedCollegeCode);
+      if (!institution) {
+        return { success: false, error: "Invalid college code. Ask your institution for the correct college ID." };
+      }
+
+      if (!normalizedCode) {
+        normalizedCode = normalizeAccessCode(institution.aishe_code || institution.udise_code);
+      }
+    }
+
+    if (!institution && normalizedCode) {
+      institution = getInstitutionByAccessCode(normalizedCode);
+    }
+
+    const resolvedCollegeCode = normalizeCollegeCode(institution?.college_code || normalizedCollegeCode);
 
     const userId = generateHexId();
     const hashedPassword = await hashPassword(password);
@@ -329,7 +364,7 @@ export async function registerUser(username, email, password, accessCode) {
       "INSERT INTO users (id, username, email, password, institution_access_code, institution_college_code) VALUES (?, ?, ?, ?, ?, ?)"
     );
     
-    stmt.run(userId, username, email, hashedPassword, normalizedCode, institution?.college_code || null);
+    stmt.run(userId, username, email, hashedPassword, normalizedCode || null, resolvedCollegeCode || null);
 
     try {
       exportUsersCsv();

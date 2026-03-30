@@ -238,13 +238,16 @@ app.get("/", (_req, res) => {
 // Register new student
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const { username, email, password, access_code } = req.body;
+    const { username, email, password, access_code, college_code } = req.body;
 
-    if (!username || !email || !password || !access_code) {
-      return res.status(400).json({ error: "All fields are required" });
+    if (!username || !email || !password || (!access_code && !college_code)) {
+      return res.status(400).json({ error: "username, email, password, and college_code (or access_code) are required" });
     }
 
-    const result = await registerUser(username, email, password, access_code);
+    const result = await registerUser(username, email, password, {
+      accessCode: access_code,
+      collegeCode: college_code
+    });
 
     if (!result.success) {
       return res.status(400).json({ error: result.error });

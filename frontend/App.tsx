@@ -34,7 +34,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
   const [institutionConfirmPassword, setInstitutionConfirmPassword] = useState('');
   const [institutionName, setInstitutionName] = useState('');
   const [accessCode, setAccessCode] = useState('');
-  const [studentAccessCode, setStudentAccessCode] = useState('');
+  const [studentCollegeCode, setStudentCollegeCode] = useState('');
   const [institutionCollegeCode, setInstitutionCollegeCode] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState<{ collegeCode: string } | null>(null);
   const [error, setError] = useState('');
@@ -75,8 +75,8 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
           if (!sanitizedEmail || password.length < 6) {
             throw new Error('Enter a valid email and 6+ character password.');
           }
-          if (!studentAccessCode.trim()) {
-            throw new Error('AISHE/UDISE code is required.');
+          if (!studentCollegeCode.trim()) {
+            throw new Error('College ID is required.');
           }
           if (password !== confirmPassword) {
             throw new Error('Password and confirm password do not match.');
@@ -86,7 +86,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             username: username.trim(),
             email: sanitizedEmail,
             password,
-            access_code: studentAccessCode.trim()
+            college_code: studentCollegeCode.trim().toUpperCase()
           });
         }
 
@@ -486,13 +486,13 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               )}
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">School/College AISHE/UDISE Code</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College ID</label>
                   <input
                     type="text"
-                    value={studentAccessCode}
-                    onChange={(e) => setStudentAccessCode(e.target.value)}
+                    value={studentCollegeCode}
+                    onChange={(e) => setStudentCollegeCode(e.target.value.toUpperCase())}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    placeholder="AISHE12345 or UDISE67890"
+                    placeholder="CC-ABC123"
                     required
                   />
                 </div>
