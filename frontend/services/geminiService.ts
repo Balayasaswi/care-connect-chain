@@ -338,9 +338,21 @@ class GeminiService {
     return Array.isArray(data.students) ? data.students : [];
   }
 
-  async fetchSessions(userId: string): Promise<SessionRecord[]> {
+  async fetchSessions(
+    userId: string,
+    options?: { actorRole?: "student" | "guardian" | "institution" | "counsellor"; guardianEmail?: string; collegeCode?: string }
+  ): Promise<SessionRecord[]> {
     const url = new URL(`${API_BASE_URL}/api/sessions`);
     url.searchParams.set("user_id", userId);
+    if (options?.actorRole) {
+      url.searchParams.set("actor_role", options.actorRole);
+    }
+    if (options?.guardianEmail) {
+      url.searchParams.set("guardian_email", options.guardianEmail);
+    }
+    if (options?.collegeCode) {
+      url.searchParams.set("college_code", options.collegeCode);
+    }
 
     const res = await fetch(url.toString(), {
       method: "GET",

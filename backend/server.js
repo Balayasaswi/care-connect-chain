@@ -592,6 +592,9 @@ app.get("/api/guardian/summaries", async (req, res) => {
 app.get("/api/sessions", async (req, res) => {
   try {
     const userId = String(req.query.user_id || "").trim();
+    const actorRole = String(req.query.actor_role || "").trim().toLowerCase();
+    const guardianEmail = String(req.query.guardian_email || "").toLowerCase().trim();
+    const collegeCode = String(req.query.college_code || "").trim().toUpperCase();
 
     if (!userId) {
       return res.status(400).json({ error: "user_id is required" });
@@ -601,6 +604,35 @@ app.get("/api/sessions", async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    if (actorRole === "guardian") {
+      if (!guardianEmail) {
+        return res.status(400).json({ error: "guardian_email is required for guardian access" });
+      }
+
+      const guardianLinks = getGuardiansByEmail(guardianEmail);
+      const hasAccess = guardianLinks.some((record) => String(record.student_id) === userId);
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Guardian is not linked to this student" });
+      }
+    }
+
+    if (actorRole === "institution") {
+      if (!collegeCode) {
+        return res.status(400).json({ error: "college_code is required for institution access" });
+      }
+
+      const institution = getInstitutionByCollegeCode(collegeCode);
+      if (!institution) {
+        return res.status(404).json({ error: "Invalid college code" });
+      }
+
+      if (String(user.institution_college_code || "").toUpperCase() !== collegeCode) {
+        return res.status(403).json({ error: "Student does not belong to this institution" });
+      }
+    }
+
+    const redactHistory = actorRole === "guardian" || actorRole === "institution";
 
     const entries = readIpfsEntriesByStudent(userId)
       .filter((entry) => entry?.cid)
@@ -628,7 +660,7 @@ app.get("/api/sessions", async (req, res) => {
           sessions.push({
             id: payload.sessionId || `ipfs_${entry.cid}`,
             summary: payload.summary,
-            history: payload.history,
+            history: redactHistory ? [] : payload.history,
             status: "completed",
             ipfs: {
               cid: entry.cid,
@@ -658,7 +690,7 @@ app.get("/api/sessions", async (req, res) => {
         sessions.push({
           id: archived.id,
           summary: archived.summary,
-          history: archived.history,
+          history: redactHistory ? [] : archived.history,
           status: "completed",
           ...(cid ? {
             ipfs: {
@@ -996,21 +1028,34 @@ app.get("/api/institution/summaries", async (req, res) => {
     const allowedStudentIds = new Set(linkedStudents.map((student) => String(student.id)));
 
     const entries = readAllIpfsEntries();
-    if (!entries.length) return res.json({ summaries: [] });
-
     const seenCids = new Set();
     const summaries = [];
-    for (const entry of entries) {
-      if (!allowedStudentIds.has(String(entry.studentId || ""))) continue;
-      if (!entry.cid || seenCids.has(entry.cid)) continue;
-      seenCids.add(entry.cid);
-      try {
-        const payload = await fetchIpfsJson(entry.cid);
-        if (payload?.summary) summaries.push(payload.summary);
-      } catch (e) {
-        console.warn("Institution summary read failed:", e.message || e);
+
+    if (entries.length) {
+      for (const entry of entries) {
+        if (!allowedStudentIds.has(String(entry.studentId || ""))) continue;
+        if (!entry.cid || seenCids.has(entry.cid)) continue;
+        seenCids.add(entry.cid);
+        try {
+          const payload = await fetchIpfsJson(entry.cid);
+          if (payload?.summary) summaries.push(payload.summary);
+        } catch (e) {
+          console.warn("Institution summary read failed:", e.message || e);
+        }
       }
     }
+
+    if (!summaries.length) {
+      for (const studentId of allowedStudentIds) {
+        const archivedSessions = getSessionArchivesByStudent(studentId);
+        for (const session of archivedSessions) {
+          if (session?.summary) {
+            summaries.push(session.summary);
+          }
+        }
+      }
+    }
+
     res.json({ summaries });
   } catch (error) {
     console.error("Institution summaries error:", error);

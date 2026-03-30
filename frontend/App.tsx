@@ -583,7 +583,10 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         }
 
         const summaries = await gemini.fetchGuardianSummaries(studentId, user.email);
-        const fetchedSessions = await gemini.fetchSessions(studentId);
+        const fetchedSessions = await gemini.fetchSessions(studentId, {
+          actorRole: 'guardian',
+          guardianEmail: user.email
+        });
         setSessions(Array.isArray(fetchedSessions) ? fetchedSessions : []);
         if (summaries.length === 0) {
           setStatus('no_sessions');
@@ -1090,7 +1093,6 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
   const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
   const [requestNotice, setRequestNotice] = useState('');
 
@@ -1104,10 +1106,12 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
-    setSelectedSession(null);
     setSessionsLoading(true);
     try {
-      const sessions = await gemini.fetchSessions(student.id);
+      const sessions = await gemini.fetchSessions(student.id, {
+        actorRole: 'institution',
+        collegeCode: user.collegeCode
+      });
       setSelectedStudentSessions(Array.isArray(sessions) ? sessions : []);
     } catch (err) {
       console.error('Institution student sessions fetch error:', err);
@@ -1268,30 +1272,14 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                 ) : selectedStudent ? (
                   <SessionList
                     sessions={selectedStudentSessions}
-                    onSelect={(session) => setSelectedSession(session)}
+                    onSelect={() => undefined}
                     onRequestCounsellor={handleRequestCounsellor}
                     requestingSessionId={requestingSessionId}
-                    showSummary={false}
                   />
                 ) : (
                   <div className="py-10 text-center text-slate-400">Choose a student to view sessions.</div>
                 )}
               </div>
-
-              {selectedSession && (
-                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
-                  <h4 className="font-serif text-xl text-slate-900">Session Conversation</h4>
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {selectedSession.history.map((msg, index) => (
-                      <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] px-4 py-2 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'}`}>
-                          {msg.content}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
