@@ -595,6 +595,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         setStatus('ready');
       } catch (err) {
         console.error("Guardian fetch error:", err);
+        setStatus('no_sessions');
       } finally {
         setLoading(false);
       }

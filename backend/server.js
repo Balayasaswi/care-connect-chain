@@ -551,12 +551,9 @@ app.get("/api/guardian/summaries", async (req, res) => {
       return res.status(400).json({ error: "student_id and guardian_email are required" });
     }
 
-    const guardian = getGuardian(studentId);
-    if (!guardian) {
-      return res.status(404).json({ error: "Guardian not found" });
-    }
-
-    if (String(guardian.guardian_email || "").toLowerCase() !== guardianEmail) {
+    const guardianLinks = getGuardiansByEmail(guardianEmail);
+    const hasAccess = guardianLinks.some((record) => String(record.student_id) === studentId);
+    if (!hasAccess) {
       return res.status(403).json({ error: "Guardian email mismatch" });
     }
 
@@ -1196,6 +1193,19 @@ app.post("/api/ipfs/pin-session", async (req, res) => {
     const user = getUserById(String(userId));
     const username = user?.username || "";
     const timestamp = pinnedAt || new Date().toISOString();
+
+    // Persist the session archive before pinning so guardians/counsellors can read summaries even if IPFS is unavailable.
+    const prePinArchive = saveSessionArchive({
+      sessionId,
+      studentId: String(userId),
+      summary,
+      history,
+      cid: null,
+      pinnedAt: timestamp
+    });
+    if (!prePinArchive.success) {
+      console.warn("Session archive pre-pin save failed:", prePinArchive.error);
+    }
 
     const payload = {
       sessionId,
