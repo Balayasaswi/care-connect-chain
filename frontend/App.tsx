@@ -1461,6 +1461,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [notifications, setNotifications] = useState<CounsellorSchedule[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [readingNotificationId, setReadingNotificationId] = useState<string | null>(null);
   const [deletedSessionIds, setDeletedSessionIds] = useState<string[]>([]);
   const [walletAddress, setWalletAddress] = useState('');
   const [walletError, setWalletError] = useState('');
@@ -1610,6 +1611,30 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const visibleSessions = sessions.filter(
     (session) => !deletedSessionIds.includes(session.id)
   );
+  const unreadNotificationsCount = notifications.filter((item) => !item.student_read_at).length;
+
+  const handleMarkNotificationRead = async (scheduleId: string) => {
+    setReadingNotificationId(scheduleId);
+    try {
+      const updated = await gemini.markStudentNotificationRead(user.id, scheduleId);
+      setNotifications((prev) => prev.map((item) => (
+        item.id === scheduleId ? { ...item, ...updated } : item
+      )));
+    } catch (error) {
+      console.error('Mark student notification read error:', error);
+    } finally {
+      setReadingNotificationId(null);
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    const unread = notifications.filter((item) => !item.student_read_at);
+    if (!unread.length) return;
+
+    for (const item of unread) {
+      await handleMarkNotificationRead(item.id);
+    }
+  };
 
   const handleSessionCheckpoint = async (history: ChatMessage[]) => {
     if (!Array.isArray(history) || history.length === 0) return;
@@ -1777,9 +1802,24 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
             )}
 
             <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <Bell className="text-indigo-600" size={18} />
-                <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-700">Notifications</h3>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Bell className="text-indigo-600" size={18} />
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-700">Notifications</h3>
+                  {unreadNotificationsCount > 0 && (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-bold uppercase tracking-widest">
+                      {unreadNotificationsCount} unread
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleMarkAllNotificationsRead}
+                  disabled={unreadNotificationsCount === 0 || readingNotificationId !== null}
+                  className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+                >
+                  Mark all read
+                </button>
               </div>
               {notificationsLoading ? (
                 <p className="text-sm text-slate-500">Checking for counsellor updates...</p>
@@ -1794,7 +1834,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                       : scheduledAt.toLocaleString();
 
                     return (
-                      <div key={item.id} className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2">
+                      <div key={item.id} className={`rounded-xl border px-3 py-2 ${item.student_read_at ? 'border-slate-200 bg-slate-50/70' : 'border-indigo-100 bg-indigo-50/60'}`}>
                         <p className="text-sm font-semibold text-indigo-900">
                           Counsellor session scheduled at {when}
                         </p>
@@ -1802,6 +1842,21 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                           Priority: {String(item.urgency || 'bad').toUpperCase()}
                         </p>
                         {item.notes && <p className="text-xs text-slate-600 mt-1">{item.notes}</p>}
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                            {item.student_read_at ? 'Read' : 'Unread'}
+                          </span>
+                          {!item.student_read_at && (
+                            <button
+                              type="button"
+                              onClick={() => handleMarkNotificationRead(item.id)}
+                              disabled={readingNotificationId === item.id}
+                              className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+                            >
+                              {readingNotificationId === item.id ? 'Saving...' : 'Mark read'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

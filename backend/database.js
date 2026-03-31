@@ -197,6 +197,11 @@ function initDatabase() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_counsellor ON counsellor_schedules(counsellor_email)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_when ON counsellor_schedules(scheduled_for DESC)");
 
+  const counsellorScheduleColumns = db.prepare("PRAGMA table_info(counsellor_schedules)").all().map((c) => c.name);
+  if (!counsellorScheduleColumns.includes("student_read_at")) {
+    db.exec("ALTER TABLE counsellor_schedules ADD COLUMN student_read_at DATETIME");
+  }
+
   // Create session archive table for non-IPFS fallback retrieval
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_archives (

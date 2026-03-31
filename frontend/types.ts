@@ -92,6 +92,7 @@ export interface CounsellorSchedule {
   urgency: CounsellorRequestUrgency;
   notes?: string;
   source_request_id?: string;
+  student_read_at?: string | null;
   created_at: string;
 }
 

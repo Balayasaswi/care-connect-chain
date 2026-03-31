@@ -328,6 +328,24 @@ class GeminiService {
     return Array.isArray(data.notifications) ? data.notifications : [];
   }
 
+  async markStudentNotificationRead(studentId: string, scheduleId: string): Promise<CounsellorSchedule> {
+    const res = await fetch(`${API_BASE_URL}/api/student/notifications/${scheduleId}/read`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ student_id: studentId })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Mark notification read error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.notification as CounsellorSchedule;
+  }
+
   async fetchInstitutionSummaries(collegeCode: string): Promise<SessionSummary[]> {
     const url = new URL(`${API_BASE_URL}/api/institution/summaries`);
     url.searchParams.set("college_code", collegeCode);

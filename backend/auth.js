@@ -1215,3 +1215,46 @@ export function listCounsellorSchedulesForStudent(studentId) {
 
   return { success: true, schedules: rows };
 }
+
+export function markCounsellorScheduleReadByStudent(scheduleId, studentId) {
+  const normalizedScheduleId = String(scheduleId || "").trim();
+  const normalizedStudentId = String(studentId || "").trim();
+
+  if (!normalizedScheduleId || !normalizedStudentId) {
+    return { success: false, error: "schedule_id and student_id are required" };
+  }
+
+  const student = getUserById(normalizedStudentId);
+  if (!student) {
+    return { success: false, error: "Student not found" };
+  }
+
+  const schedule = db
+    .prepare("SELECT * FROM counsellor_schedules WHERE id = ?")
+    .get(normalizedScheduleId);
+
+  if (!schedule) {
+    return { success: false, error: "Schedule not found" };
+  }
+
+  if (String(schedule.student_id) !== normalizedStudentId) {
+    return { success: false, error: "Schedule does not belong to this student" };
+  }
+
+  db.prepare(
+    `UPDATE counsellor_schedules
+     SET student_read_at = COALESCE(student_read_at, CURRENT_TIMESTAMP)
+     WHERE id = ?`
+  ).run(normalizedScheduleId);
+
+  const updated = db
+    .prepare(
+      `SELECT s.*, u.username AS student_username, u.email AS student_email
+       FROM counsellor_schedules s
+       JOIN users u ON u.id = s.student_id
+       WHERE s.id = ?`
+    )
+    .get(normalizedScheduleId);
+
+  return { success: true, schedule: updated };
+}
