@@ -776,12 +776,10 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 
 // --- Counsellor Dashboard ---
 const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
-  const [report, setReport] = useState<string>('');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
-  const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [schedules, setSchedules] = useState<CounsellorSchedule[]>([]);
   const [schedulesLoading, setSchedulesLoading] = useState(false);
@@ -793,7 +791,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [requestNotice, setRequestNotice] = useState('');
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<'not_found' | 'no_students' | 'no_sessions' | 'ready'>('ready');
+  const [status, setStatus] = useState<'not_found' | 'no_students' | 'ready'>('ready');
 
   const normalizedStudentSearch = studentSearch.trim().toLowerCase();
   const filteredStudents = students.filter((student) => {
@@ -803,6 +801,24 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
     return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
   });
 
+  const highlyCriticalStudents = Array.from(
+    new Map(
+      requests
+        .filter((request) => request.urgency === 'critical' && request.status !== 'session_created')
+        .map((request) => {
+          const matchedStudent = students.find((student) => student.id === request.student_id);
+          return [
+            request.student_id,
+            {
+              id: request.student_id,
+              username: matchedStudent?.username || request.student_username || '',
+              email: matchedStudent?.email || request.student_email || request.student_id
+            }
+          ] as const;
+        })
+    ).values()
+  );
+
   const toInputDateTime = (date: Date) => {
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 16);
@@ -810,11 +826,18 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
-    setSelectedSession(null);
     setSessionsLoading(true);
     try {
       const sessions = await gemini.fetchSessions(student.id);
-      setSelectedStudentSessions(Array.isArray(sessions) ? sessions : []);
+      const normalized = Array.isArray(sessions) ? sessions : [];
+      const uniqueBySessionId = new Map<string, SessionRecord>();
+      for (const session of normalized) {
+        if (!session?.id) continue;
+        if (!uniqueBySessionId.has(session.id)) {
+          uniqueBySessionId.set(session.id, session);
+        }
+      }
+      setSelectedStudentSessions(Array.from(uniqueBySessionId.values()));
     } catch (err) {
       console.error('Counsellor student sessions fetch error:', err);
       setSelectedStudentSessions([]);
@@ -849,9 +872,8 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
   useEffect(() => {
     const fetchSummaries = async () => {
       try {
-        const [linkedStudents, summaries, pendingRequests] = await Promise.all([
+        const [linkedStudents, pendingRequests] = await Promise.all([
           gemini.fetchCounsellorStudents(user.email),
-          gemini.fetchCounsellorSummaries(user.email),
           gemini.fetchCounsellorRequests(user.email)
         ]);
 
@@ -863,11 +885,6 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
           return;
         }
 
-        await selectStudent(linkedStudents[0]);
-
-        if (summaries.length === 0) { setStatus('no_sessions'); setLoading(false); return; }
-        const formattedReport = await gemini.getGuardianReport(summaries);
-        setReport(formattedReport);
         setStatus('ready');
       } catch (err) {
         console.error('Counsellor fetch error:', err);
@@ -975,16 +992,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
               <Users className="mx-auto text-slate-300" size={48} />
               <p className="text-slate-600 font-medium">No Students Linked To Your Institution</p>
             </div>
-          ) : status === 'no_sessions' ? (
-            <div className="py-12 text-center space-y-4">
-              <History className="mx-auto text-slate-300" size={48} />
-              <p className="text-slate-600 font-medium">No Sessions Recorded Yet</p>
-            </div>
-          ) : (
-            <div className="bg-teal-50 p-6 rounded-2xl border border-teal-100">
-              <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">{report}</pre>
-            </div>
-          )}
+          ) : null}
 
           {students.length > 0 && (
             <div className="space-y-5 border-t border-slate-100 pt-6">
@@ -998,6 +1006,25 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
+
+              {highlyCriticalStudents.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-rose-600">Highly Critical Students</p>
+                  <div className="flex flex-wrap gap-2">
+                    {highlyCriticalStudents.map((student) => (
+                      <button
+                        key={`critical_${student.id}`}
+                        type="button"
+                        onClick={() => selectStudent(student)}
+                        className="px-3 py-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold hover:bg-rose-100"
+                      >
+                        {student.username || student.email}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-2 sm:grid-cols-2">
                 {filteredStudents.map((student) => (
                   <button
@@ -1015,41 +1042,9 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                 <p className="text-sm text-slate-500">No students match your search.</p>
               )}
 
-              <div className="space-y-4">
-                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-500">
-                  {selectedStudent ? `Sessions - ${selectedStudent.username || selectedStudent.email}` : 'Select a student'}
-                </h4>
-
-                {sessionsLoading ? (
-                  <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
-                ) : selectedStudent ? (
-                  <SessionList
-                    sessions={selectedStudentSessions}
-                    onSelect={(session) => setSelectedSession(session)}
-                    showSummary={false}
-                  />
-                ) : (
-                  <div className="py-10 text-center text-slate-400">Choose a student to view sessions.</div>
-                )}
-              </div>
-
-              {selectedSession && (
-                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
-                  <h4 className="font-serif text-xl text-slate-900">Session Conversation</h4>
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {selectedSession.history.map((msg, index) => (
-                      <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] px-4 py-2 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'}`}>
-                          {msg.content}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {selectedStudent && (
-                <div className="space-y-4 border border-teal-100 rounded-2xl p-5 bg-teal-50/50">
+                <div className="space-y-6">
+                  <div className="space-y-4 border border-teal-100 rounded-2xl p-5 bg-teal-50/50">
                   <h4 className="font-serif text-lg text-slate-900">Schedule Support Session</h4>
                   <form onSubmit={handleScheduleForSelectedStudent} className="grid gap-3 sm:grid-cols-2">
                     <input
@@ -1101,6 +1096,44 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                       </div>
                     )}
                   </div>
+
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="font-serif text-lg text-slate-900">Session Summaries</h4>
+                    {sessionsLoading ? (
+                      <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
+                    ) : selectedStudentSessions.length === 0 ? (
+                      <div className="py-10 text-center text-slate-400">No session summaries for this student yet.</div>
+                    ) : (
+                      <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-white overflow-hidden">
+                        {selectedStudentSessions.map((session) => {
+                          const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
+                          const keywords = Array.isArray(session.summary?.keywords) ? session.summary.keywords.join(', ') : '';
+                          const rawDate = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
+                          const parsedDate = new Date(rawDate);
+                          const displayDate = Number.isNaN(parsedDate.getTime()) ? 'Date unavailable' : parsedDate.toISOString();
+
+                          return (
+                            <div key={session.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <p className="text-sm text-slate-700">Session Date: {displayDate}</p>
+                                <p className="text-sm text-slate-700">Emotion: {emotion}</p>
+                                <p className="text-sm text-slate-700">Keywords: {keywords}</p>
+                                <p className="text-sm text-slate-700">Summary: {session.summary?.summary || 'Session summary unavailable.'}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!selectedStudent && (
+                <div className="py-10 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+                  Select a student to view scheduling and session summaries.
                 </div>
               )}
             </div>
