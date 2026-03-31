@@ -202,11 +202,12 @@ JSON FORMAT:
   "end_time_stamp": "<ISO-8601>",
   "keywords": ["3-8 emotionally relevant terms"],
   "emotion": "CRITICAL | BAD | NEUTRAL | GOOD | HAPPY",
-  "summary": "2-3 concise lines describing the emotional journey"
+  "summary": "One short sentence (max 18 words)"
 }
 
 Keywords must have no stopwords or punctuation.
 Emotion: Choose the most fitting one. If uncertain, choose NEUTRAL.
+Summary: Keep it brief, plain, and specific. Do not exceed 18 words.
 
 TRANSCRIPT:
 ${transcript}`;
@@ -224,6 +225,16 @@ function safeParseSummaryJson(text) {
       return null;
     }
   }
+}
+
+function shortenSummaryText(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "Summary unavailable.";
+
+  const firstSentence = text.split(/[.!?]/).map((part) => part.trim()).find(Boolean) || text;
+  const words = firstSentence.split(" ").filter(Boolean);
+  const limited = words.slice(0, 18).join(" ").trim();
+  return limited || "Summary unavailable.";
 }
 
 // Encryption removed for now; payloads are stored in IPFS as plain JSON.
@@ -1212,6 +1223,8 @@ app.post("/api/summary", async (req, res) => {
     if (!parsed) {
       return res.status(502).json({ error: "Failed to parse summary JSON" });
     }
+
+    parsed.summary = shortenSummaryText(parsed.summary);
 
     res.json(parsed);
   } catch (error) {
