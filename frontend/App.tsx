@@ -1397,6 +1397,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionIpfs, setActiveSessionIpfs] = useState<IpfsPinInfo | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -1534,6 +1535,13 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       summary,
       history,
       pinnedAt: nowIso
+    }).then((ipfsResult) => {
+      setActiveSessionIpfs({
+        cid: ipfsResult.cid,
+        uri: ipfsResult.uri,
+        gatewayUrl: ipfsResult.gatewayUrl,
+        pinnedAt: nowIso
+      });
     });
   };
 
@@ -1564,23 +1572,34 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         start_time_stamp: startTimestamp,
         end_time_stamp: endTimestamp
       };
-      let ipfs: IpfsPinInfo | undefined;
+      let ipfs: IpfsPinInfo | undefined = activeSessionIpfs || undefined;
 
       try {
         const pinnedAt = new Date().toISOString();
-        const ipfsResult = await gemini.pinSessionToIpfs({
+        if (!ipfs) {
+          const ipfsResult = await gemini.pinSessionToIpfs({
+            sessionId,
+            userId: user.id,
+            summary,
+            history,
+            pinnedAt
+          });
+          ipfs = {
+            cid: ipfsResult.cid,
+            uri: ipfsResult.uri,
+            gatewayUrl: ipfsResult.gatewayUrl,
+            pinnedAt
+          };
+        }
+
+        await gemini.archiveSession({
           sessionId,
           userId: user.id,
           summary,
           history,
-          pinnedAt
+          pinnedAt,
+          ...(ipfs?.cid ? { cid: ipfs.cid } : {})
         });
-        ipfs = {
-          cid: ipfsResult.cid,
-          uri: ipfsResult.uri,
-          gatewayUrl: ipfsResult.gatewayUrl,
-          pinnedAt
-        };
       } catch (ipfsError) {
         console.error("IPFS pin error:", ipfsError);
         try {
@@ -1609,6 +1628,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
     } finally {
       setIsProcessing(false);
       setActiveSessionId(null);
+      setActiveSessionIpfs(null);
       setView('list');
     }
   };
@@ -1661,6 +1681,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
               <button
                 onClick={() => {
                   setActiveSessionId(`session_${Date.now()}`);
+                  setActiveSessionIpfs(null);
                   setView('chat');
                 }}
                 className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-medium"
