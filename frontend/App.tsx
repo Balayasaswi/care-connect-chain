@@ -633,12 +633,27 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
           return;
         }
 
-        const summaries = await gemini.fetchGuardianSummaries(studentId, user.email);
         const fetchedSessions = await gemini.fetchSessions(studentId, {
           actorRole: 'guardian',
           guardianEmail: user.email
         });
-        setSessions(Array.isArray(fetchedSessions) ? fetchedSessions : []);
+
+        const normalizedSessions = Array.isArray(fetchedSessions) ? fetchedSessions : [];
+        const uniqueBySessionId = new Map<string, SessionRecord>();
+        for (const session of normalizedSessions) {
+          if (!session?.id) continue;
+          if (!uniqueBySessionId.has(session.id)) {
+            uniqueBySessionId.set(session.id, session);
+          }
+        }
+
+        const dedupedSessions = Array.from(uniqueBySessionId.values());
+        setSessions(dedupedSessions);
+
+        const summaries = dedupedSessions
+          .map((session) => session.summary)
+          .filter((summary) => Boolean(summary));
+
         if (summaries.length === 0) {
           setStatus('no_sessions');
           return;
