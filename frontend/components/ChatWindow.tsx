@@ -7,9 +7,10 @@ import { Send, LogOut, Info } from 'lucide-react';
 interface ChatWindowProps {
   userId: string;
   onSessionEnd: (history: ChatMessage[]) => void;
+  onSessionCheckpoint?: (history: ChatMessage[]) => void | Promise<void>;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSessionCheckpoint }) => {
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +64,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd }) => {
       };
 
       setHistory(prev => [...prev, assistantMsg]);
+      const checkpointHistory = [...previousHistory, userMsg, assistantMsg];
+      if (onSessionCheckpoint) {
+        void Promise.resolve(onSessionCheckpoint(checkpointHistory)).catch((checkpointError) => {
+          console.error('Checkpoint pin error:', checkpointError);
+        });
+      }
     } catch (error) {
       console.error("Chat Error:", error);
       const errorMsg: ChatMessage = {
@@ -71,6 +78,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd }) => {
         timestamp: new Date().toISOString()
       };
       setHistory(prev => [...prev, errorMsg]);
+      const checkpointHistory = [...previousHistory, userMsg, errorMsg];
+      if (onSessionCheckpoint) {
+        void Promise.resolve(onSessionCheckpoint(checkpointHistory)).catch((checkpointError) => {
+          console.error('Checkpoint pin error:', checkpointError);
+        });
+      }
     } finally {
       setIsLoading(false);
     }

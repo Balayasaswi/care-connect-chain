@@ -1396,6 +1396,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const [view, setView] = useState<'list' | 'chat' | 'view_session'>('list');
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -1507,10 +1508,39 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
     (session) => !deletedSessionIds.includes(session.id)
   );
 
+  const handleSessionCheckpoint = async (history: ChatMessage[]) => {
+    if (!Array.isArray(history) || history.length === 0) return;
+
+    const sessionId = activeSessionId || `session_${Date.now()}`;
+    if (!activeSessionId) {
+      setActiveSessionId(sessionId);
+    }
+
+    const nowIso = new Date().toISOString();
+    const summaryPreview = history[history.length - 1]?.content || 'Session in progress.';
+
+    const summary = {
+      userid: user.id,
+      start_time_stamp: history[0]?.timestamp || nowIso,
+      end_time_stamp: history[history.length - 1]?.timestamp || nowIso,
+      keywords: [],
+      emotion: 'NEUTRAL' as const,
+      summary: summaryPreview
+    };
+
+    await gemini.pinSessionToIpfs({
+      sessionId,
+      userId: user.id,
+      summary,
+      history,
+      pinnedAt: nowIso
+    });
+  };
+
   const handleSessionEnd = async (history: ChatMessage[]) => {
     setIsProcessing(true);
     try {
-      const sessionId = `session_${Date.now()}`;
+      const sessionId = activeSessionId || `session_${Date.now()}`;
       const nowIso = new Date().toISOString();
       const startTimestamp = history[0]?.timestamp || nowIso;
       const endTimestamp = history[history.length - 1]?.timestamp || nowIso;
@@ -1578,6 +1608,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       console.error("Session end error:", e);
     } finally {
       setIsProcessing(false);
+      setActiveSessionId(null);
       setView('list');
     }
   };
@@ -1627,7 +1658,13 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 <h2 className="text-2xl font-serif text-slate-900">My Conversations</h2>
                 <p className="text-slate-500 text-sm">Strictly private records.</p>
               </div>
-              <button onClick={() => setView('chat')} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-medium">
+              <button
+                onClick={() => {
+                  setActiveSessionId(`session_${Date.now()}`);
+                  setView('chat');
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-medium"
+              >
                 <Plus size={20} /> New Session
               </button>
             </div>
@@ -1645,7 +1682,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
 
         {view === 'chat' && (
           <div className="h-[calc(100vh-12rem)]">
-            <ChatWindow userId={user.id} onSessionEnd={handleSessionEnd} />
+            <ChatWindow userId={user.id} onSessionEnd={handleSessionEnd} onSessionCheckpoint={handleSessionCheckpoint} />
           </div>
         )}
 
