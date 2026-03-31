@@ -778,6 +778,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
+  const [view, setView] = useState<'students' | 'student_detail'>('students');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -860,6 +861,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
   };
 
   const selectStudent = async (student: CounsellorStudent) => {
+    setView('student_detail');
     await Promise.all([
       loadStudentSessions(student),
       loadStudentSchedules(student.id)
@@ -967,17 +969,31 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="bg-white rounded-3xl p-8 border border-teal-100 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-6">
-            <h2 className="text-2xl font-serif text-slate-800">Clinical Session Report</h2>
-            <div className="flex flex-wrap gap-3 mt-2">
-              <span className="text-[10px] bg-teal-50 text-teal-700 px-2 py-1 rounded font-bold uppercase tracking-tight">INSTITUTION STUDENTS ONLY</span>
-              <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">STUDENTS: {students.length}</span>
-              {user.organization && <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">{user.organization}</span>}
-              <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-1 rounded font-bold uppercase tracking-widest">CLINICAL VIEW</span>
-            </div>
-            {students.length > 0 && (
-              <p className="text-xs text-slate-500 mt-3">
-                {students.map((student) => student.username || student.email).join(', ')}
-              </p>
+            {view === 'students' ? (
+              <>
+                <h2 className="text-2xl font-serif text-slate-800">Clinical Session Report</h2>
+                <div className="flex flex-wrap gap-3 mt-2">
+                  <span className="text-[10px] bg-teal-50 text-teal-700 px-2 py-1 rounded font-bold uppercase tracking-tight">INSTITUTION STUDENTS ONLY</span>
+                  <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">STUDENTS: {students.length}</span>
+                  {user.organization && <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">{user.organization}</span>}
+                  <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-1 rounded font-bold uppercase tracking-widest">CLINICAL VIEW</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setView('students')}
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-teal-700 hover:text-teal-800"
+                >
+                  <ChevronLeft size={14} />
+                  Back to Students
+                </button>
+                <h2 className="text-2xl font-serif text-slate-800 mt-3">
+                  {selectedStudent?.username || selectedStudent?.email || 'Student'} Care View
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">Schedule support first, then review summary-only sessions.</p>
+              </>
             )}
           </div>
           {loading ? (
@@ -994,7 +1010,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
             </div>
           ) : null}
 
-          {students.length > 0 && (
+          {students.length > 0 && view === 'students' && (
             <div className="space-y-5 border-t border-slate-100 pt-6">
               <h3 className="text-lg font-serif text-slate-900">Students</h3>
               <div>
@@ -1041,101 +1057,94 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
               {filteredStudents.length === 0 && (
                 <p className="text-sm text-slate-500">No students match your search.</p>
               )}
+            </div>
+          )}
 
-              {selectedStudent && (
-                <div className="space-y-6">
-                  <div className="space-y-4 border border-teal-100 rounded-2xl p-5 bg-teal-50/50">
-                  <h4 className="font-serif text-lg text-slate-900">Schedule Support Session</h4>
-                  <form onSubmit={handleScheduleForSelectedStudent} className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      type="datetime-local"
-                      value={scheduleAt}
-                      onChange={(event) => setScheduleAt(event.target.value)}
-                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
-                      required
-                    />
-                    <select
-                      value={scheduleUrgency}
-                      onChange={(event) => setScheduleUrgency(event.target.value as 'critical' | 'bad')}
-                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
-                    >
-                      <option value="bad">Bad</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                    <textarea
-                      value={scheduleNotes}
-                      onChange={(event) => setScheduleNotes(event.target.value)}
-                      placeholder="Session notes or intervention plan"
-                      className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 text-sm min-h-20"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isScheduling}
-                      className="sm:col-span-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 disabled:opacity-60"
-                    >
-                      {isScheduling ? 'Scheduling...' : 'Schedule Session'}
-                    </button>
-                  </form>
+          {students.length > 0 && view === 'student_detail' && selectedStudent && (
+            <div className="space-y-6 border-t border-slate-100 pt-6">
+              <div className="space-y-4 border border-teal-100 rounded-2xl p-5 bg-teal-50/50">
+                <h4 className="font-serif text-lg text-slate-900">Schedule Support Session</h4>
+                <form onSubmit={handleScheduleForSelectedStudent} className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(event) => setScheduleAt(event.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                    required
+                  />
+                  <select
+                    value={scheduleUrgency}
+                    onChange={(event) => setScheduleUrgency(event.target.value as 'critical' | 'bad')}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                  >
+                    <option value="bad">Bad</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                  <textarea
+                    value={scheduleNotes}
+                    onChange={(event) => setScheduleNotes(event.target.value)}
+                    placeholder="Session notes or intervention plan"
+                    className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 text-sm min-h-20"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isScheduling}
+                    className="sm:col-span-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 disabled:opacity-60"
+                  >
+                    {isScheduling ? 'Scheduling...' : 'Schedule Session'}
+                  </button>
+                </form>
 
-                  <div className="space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Scheduled Sessions</p>
-                    {schedulesLoading ? (
-                      <p className="text-sm text-slate-500">Loading schedules...</p>
-                    ) : schedules.length === 0 ? (
-                      <p className="text-sm text-slate-500">No sessions scheduled yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {schedules.map((schedule) => (
-                          <div key={schedule.id} className="rounded-xl bg-white border border-slate-100 px-3 py-2">
-                            <p className="text-sm font-semibold text-slate-700">
-                              {new Date(schedule.scheduled_for).toLocaleString()} | {schedule.urgency.toUpperCase()}
-                            </p>
-                            {schedule.notes && <p className="text-xs text-slate-500 mt-1">{schedule.notes}</p>}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Scheduled Sessions</p>
+                  {schedulesLoading ? (
+                    <p className="text-sm text-slate-500">Loading schedules...</p>
+                  ) : schedules.length === 0 ? (
+                    <p className="text-sm text-slate-500">No sessions scheduled yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {schedules.map((schedule) => (
+                        <div key={schedule.id} className="rounded-xl bg-white border border-slate-100 px-3 py-2">
+                          <p className="text-sm font-semibold text-slate-700">
+                            {new Date(schedule.scheduled_for).toLocaleString()} | {schedule.urgency.toUpperCase()}
+                          </p>
+                          {schedule.notes && <p className="text-xs text-slate-500 mt-1">{schedule.notes}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-serif text-lg text-slate-900">Session Summaries</h4>
+                {sessionsLoading ? (
+                  <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
+                ) : selectedStudentSessions.length === 0 ? (
+                  <div className="py-10 text-center text-slate-400">No session summaries for this student yet.</div>
+                ) : (
+                  <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-white overflow-hidden">
+                    {selectedStudentSessions.map((session) => {
+                      const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
+                      const keywords = Array.isArray(session.summary?.keywords) ? session.summary.keywords.join(', ') : '';
+                      const rawDate = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
+                      const parsedDate = new Date(rawDate);
+                      const displayDate = Number.isNaN(parsedDate.getTime()) ? 'Date unavailable' : parsedDate.toISOString();
+
+                      return (
+                        <div key={session.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="text-sm text-slate-700">Session Date: {displayDate}</p>
+                            <p className="text-sm text-slate-700">Emotion: {emotion}</p>
+                            <p className="text-sm text-slate-700">Keywords: {keywords}</p>
+                            <p className="text-sm text-slate-700">Summary: {session.summary?.summary || 'Session summary unavailable.'}</p>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  </div>
-
-                  <div className="space-y-3">
-                    <h4 className="font-serif text-lg text-slate-900">Session Summaries</h4>
-                    {sessionsLoading ? (
-                      <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
-                    ) : selectedStudentSessions.length === 0 ? (
-                      <div className="py-10 text-center text-slate-400">No session summaries for this student yet.</div>
-                    ) : (
-                      <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-white overflow-hidden">
-                        {selectedStudentSessions.map((session) => {
-                          const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
-                          const keywords = Array.isArray(session.summary?.keywords) ? session.summary.keywords.join(', ') : '';
-                          const rawDate = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
-                          const parsedDate = new Date(rawDate);
-                          const displayDate = Number.isNaN(parsedDate.getTime()) ? 'Date unavailable' : parsedDate.toISOString();
-
-                          return (
-                            <div key={session.id} className="px-6 py-4 flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <p className="text-sm text-slate-700">Session Date: {displayDate}</p>
-                                <p className="text-sm text-slate-700">Emotion: {emotion}</p>
-                                <p className="text-sm text-slate-700">Keywords: {keywords}</p>
-                                <p className="text-sm text-slate-700">Summary: {session.summary?.summary || 'Session summary unavailable.'}</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {!selectedStudent && (
-                <div className="py-10 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
-                  Select a student to view scheduling and session summaries.
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
