@@ -314,6 +314,20 @@ class GeminiService {
     return Array.isArray(data.schedules) ? data.schedules : [];
   }
 
+  async fetchStudentNotifications(studentId: string): Promise<CounsellorSchedule[]> {
+    const url = new URL(`${API_BASE_URL}/api/student/notifications`);
+    url.searchParams.set("student_id", studentId);
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Student notifications error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data.notifications) ? data.notifications : [];
+  }
+
   async fetchInstitutionSummaries(collegeCode: string): Promise<SessionSummary[]> {
     const url = new URL(`${API_BASE_URL}/api/institution/summaries`);
     url.searchParams.set("college_code", collegeCode);

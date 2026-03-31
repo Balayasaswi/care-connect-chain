@@ -1191,3 +1191,27 @@ export function listCounsellorSchedules(counsellorEmail, studentId = "") {
 
   return { success: true, schedules: rows };
 }
+
+export function listCounsellorSchedulesForStudent(studentId) {
+  const normalizedStudentId = String(studentId || "").trim();
+  if (!normalizedStudentId) {
+    return { success: false, error: "student_id is required" };
+  }
+
+  const student = getUserById(normalizedStudentId);
+  if (!student) {
+    return { success: false, error: "Student not found" };
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT s.*, u.username AS student_username, u.email AS student_email
+       FROM counsellor_schedules s
+       JOIN users u ON u.id = s.student_id
+       WHERE s.student_id = ?
+       ORDER BY s.scheduled_for DESC`
+    )
+    .all(normalizedStudentId);
+
+  return { success: true, schedules: rows };
+}

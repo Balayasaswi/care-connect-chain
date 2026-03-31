@@ -6,7 +6,7 @@ import { gemini } from './services/geminiService.ts';
 import { connectWallet, storeCidToChain } from './services/chainService.ts';
 import ChatWindow from './components/ChatWindow.tsx';
 import SessionList from './components/SessionList.tsx';
-import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle, Building2, Stethoscope } from 'lucide-react';
+import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle, Building2, Stethoscope, Bell } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
 
@@ -1459,6 +1459,8 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
 // --- Student Dashboard ---
 const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [notifications, setNotifications] = useState<CounsellorSchedule[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [deletedSessionIds, setDeletedSessionIds] = useState<string[]>([]);
   const [walletAddress, setWalletAddress] = useState('');
   const [walletError, setWalletError] = useState('');
@@ -1491,6 +1493,35 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
     loadSessions();
     return () => {
       isActive = false;
+    };
+  }, [user.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadNotifications = async () => {
+      try {
+        const rows = await gemini.fetchStudentNotifications(user.id);
+        if (!isMounted) return;
+        setNotifications(Array.isArray(rows) ? rows : []);
+      } catch (error) {
+        console.error('Student notifications load error:', error);
+        if (isMounted) {
+          setNotifications([]);
+        }
+      } finally {
+        if (isMounted) {
+          setNotificationsLoading(false);
+        }
+      }
+    };
+
+    loadNotifications();
+    const timer = window.setInterval(loadNotifications, 60000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(timer);
     };
   }, [user.id]);
 
@@ -1744,6 +1775,40 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 {walletError}
               </div>
             )}
+
+            <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Bell className="text-indigo-600" size={18} />
+                <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-700">Notifications</h3>
+              </div>
+              {notificationsLoading ? (
+                <p className="text-sm text-slate-500">Checking for counsellor updates...</p>
+              ) : notifications.length === 0 ? (
+                <p className="text-sm text-slate-500">No counsellor schedule notifications yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {notifications.map((item) => {
+                    const scheduledAt = new Date(item.scheduled_for);
+                    const when = Number.isNaN(scheduledAt.getTime())
+                      ? item.scheduled_for
+                      : scheduledAt.toLocaleString();
+
+                    return (
+                      <div key={item.id} className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2">
+                        <p className="text-sm font-semibold text-indigo-900">
+                          Counsellor session scheduled at {when}
+                        </p>
+                        <p className="text-xs text-indigo-800 uppercase font-bold tracking-widest mt-1">
+                          Priority: {String(item.urgency || 'bad').toUpperCase()}
+                        </p>
+                        {item.notes && <p className="text-xs text-slate-600 mt-1">{item.notes}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-serif text-slate-900">My Conversations</h2>

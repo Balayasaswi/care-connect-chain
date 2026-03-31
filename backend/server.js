@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
-import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus, createCounsellorSchedule, listCounsellorSchedules, saveSessionArchive, getSessionArchivesByStudent } from "./auth.js";
+import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus, createCounsellorSchedule, listCounsellorSchedules, listCounsellorSchedulesForStudent, saveSessionArchive, getSessionArchivesByStudent } from "./auth.js";
 
 dotenv.config();
 
@@ -966,6 +966,21 @@ app.get("/api/counsellor/schedules", (req, res) => {
   } catch (error) {
     console.error("Counsellor schedule list error:", error);
     res.status(500).json({ error: "Failed to fetch counsellor schedules" });
+  }
+});
+
+app.get("/api/student/notifications", (req, res) => {
+  try {
+    const studentId = String(req.query.student_id || "").trim();
+    const result = listCounsellorSchedulesForStudent(studentId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ notifications: result.schedules || [] });
+  } catch (error) {
+    console.error("Student notifications error:", error);
+    res.status(500).json({ error: "Failed to fetch student notifications" });
   }
 });
 
