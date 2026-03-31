@@ -614,7 +614,6 @@ const SessionSummaryRows: React.FC<{
 
 // --- Guardian View ---
 const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
-  const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_sessions' | 'ready'>('ready');
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
@@ -650,17 +649,10 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         const dedupedSessions = Array.from(uniqueBySessionId.values());
         setSessions(dedupedSessions);
 
-        const summaries = dedupedSessions
-          .map((session) => session.summary)
-          .filter((summary) => Boolean(summary));
-
-        if (summaries.length === 0) {
+        if (dedupedSessions.length === 0) {
           setStatus('no_sessions');
           return;
         }
-
-        const formattedReport = await gemini.getGuardianReport(summaries);
-        setReport(formattedReport);
         setStatus('ready');
       } catch (err) {
         console.error("Guardian fetch error:", err);
@@ -731,22 +723,44 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
               <p className="text-slate-600 font-medium">No Active Sessions</p>
             </div>
           ) : (
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-              <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">
-                {report}
-              </pre>
+            <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-slate-50 overflow-hidden">
+              {sessions.map((session) => {
+                const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
+                const canReport = emotion === 'BAD' || emotion === 'CRITICAL';
+                const keywords = Array.isArray(session.summary?.keywords) ? session.summary.keywords.join(', ') : '';
+                const rawDate = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
+                const parsedDate = new Date(rawDate);
+                const displayDate = Number.isNaN(parsedDate.getTime()) ? 'Date unavailable' : parsedDate.toISOString();
+
+                return (
+                  <div key={session.id} className="px-6 py-4 bg-slate-50 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm text-slate-700">Session Date: {displayDate}</p>
+                      <p className="text-sm text-slate-700">Emotion: {emotion}</p>
+                      <p className="text-sm text-slate-700">Keywords: {keywords}</p>
+                      <p className="text-sm text-slate-700">Summary: {session.summary?.summary || 'Session summary unavailable.'}</p>
+                    </div>
+                    <div className="shrink-0">
+                      {canReport && (
+                        <button
+                          type="button"
+                          onClick={() => handleRequestCounsellor(session)}
+                          disabled={requestingSessionId === session.id}
+                          className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                        >
+                          {requestingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {sessions.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="font-serif text-xl text-slate-800">Session Summaries</h3>
-              {requestNotice && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
-                  {requestNotice}
-                </div>
-              )}
-              <SessionSummaryRows sessions={sessions} onReport={handleRequestCounsellor} reportingSessionId={requestingSessionId} />
+          {requestNotice && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+              {requestNotice}
             </div>
           )}
 
