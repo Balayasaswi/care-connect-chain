@@ -1211,6 +1211,8 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
+  const [requestNotice, setRequestNotice] = useState('');
 
   const normalizedStudentSearch = studentSearch.trim().toLowerCase();
   const filteredStudents = students.filter((student) => {
@@ -1220,11 +1222,16 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
   });
   const recommendedStudents = filteredStudents.slice(0, 5);
+  const reportableSession = selectedStudentSessions.find((session) => {
+    const emotion = String(session.summary?.emotion || '').toUpperCase();
+    return emotion === 'BAD' || emotion === 'CRITICAL';
+  });
 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
     setView('student_summaries');
     setSessionsLoading(true);
+    setRequestNotice('');
     try {
       const sessions = await gemini.fetchSessions(student.id, {
         actorRole: 'institution',
@@ -1278,6 +1285,31 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     };
     fetchSummaries();
   }, [user.collegeCode]);
+
+  const handleRequestCounsellor = async () => {
+    if (!selectedStudent || !reportableSession) return;
+
+    setRequestingSessionId(reportableSession.id);
+    setRequestNotice('');
+    try {
+      const urgency = reportableSession.summary.emotion === 'CRITICAL' ? 'critical' : 'bad';
+      await gemini.createCounsellorRequest({
+        studentId: selectedStudent.id,
+        sessionId: reportableSession.id,
+        sessionEmotion: reportableSession.summary.emotion,
+        urgency,
+        reason: `Institution escalated ${reportableSession.summary.emotion} behaviour from session summary.`,
+        requestedByRole: 'institution',
+        requestedByEmail: user.email
+      });
+      setRequestNotice('Request sent to counsellor successfully.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
+      setRequestNotice(message);
+    } finally {
+      setRequestingSessionId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-amber-50">
@@ -1387,8 +1419,18 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                 <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
               ) : (
                 <div className="space-y-4">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h4 className="text-xl font-serif text-slate-800">Student Progress Report</h4>
+                  <div className="border-b border-slate-100 pb-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className="text-xl font-serif text-slate-800">Student Progress Report</h4>
+                      <button
+                        type="button"
+                        onClick={handleRequestCounsellor}
+                        disabled={!reportableSession || requestingSessionId !== null}
+                        className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        {requestingSessionId ? 'Reporting...' : 'Report to Counsellor'}
+                      </button>
+                    </div>
                     <div className="flex gap-3 mt-2 flex-wrap">
                       <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
                         STUDENT: {selectedStudent.email}
@@ -1397,6 +1439,14 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                         PRIVATE DATA PROTECTED
                       </span>
                     </div>
+                    {!reportableSession && (
+                      <p className="text-xs text-slate-500">No BAD/CRITICAL summary available for escalation.</p>
+                    )}
+                    {requestNotice && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                        {requestNotice}
+                      </div>
+                    )}
                   </div>
 
                   {selectedStudentSessions.length > 0 && (
