@@ -1,0 +1,13 @@
+{
+  "name": "care-connect-chain",
+  "version": "1.0.0",
+  "description": "Care Connect Chain - Blockchain-based care coordination",
+  "type": "module",
+  "scripts": {
+    "start": "cd backend && node server.js",
+    "install-backend": "cd backend && npm install"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
