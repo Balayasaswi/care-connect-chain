@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { registerUser, loginUser, addGuardian, getGuardian, getUserById, getUserByEmail, appendIpfsCsv, appendBlockchainCsv, registerGuardian, loginGuardian, readIpfsEntriesByStudent, readBlockchainEntriesByStudent, registerCounsellor, loginCounsellor, registerInstitution, loginInstitution, getInstitutionByCollegeCode, getGuardiansByEmail, readAllIpfsEntries, getCounsellorByEmail, getUsersByInstitutionCollegeCode, getUsersByCounsellorInstitution, createNetworkConnectionRequest, getNetworkConnectionById, updateNetworkConnectionStatus, listNetworkConnectionsForStudent, listNetworkConnectionsForActor, deleteNetworkConnection, createCounsellorRequest, listCounsellorRequestsForCounsellor, updateCounsellorRequestStatus, createCounsellorSchedule, listCounsellorSchedules, listCounsellorSchedulesForStudent, markCounsellorScheduleReadByStudent, saveSessionArchive, getSessionArchivesByStudent } from "./auth.js";
 
 dotenv.config();
@@ -9,6 +12,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const FRONTEND_DIST_DIR = path.resolve(__dirname, "../frontend/dist");
+const FRONTEND_INDEX_FILE = path.join(FRONTEND_DIST_DIR, "index.html");
 const PINATA_BASE_URL = "https://api.pinata.cloud";
 const PINATA_GATEWAY_BASE = "https://gateway.pinata.cloud/ipfs";
 const IPFS_PROVIDER = String(process.env.IPFS_PROVIDER || "local").trim().toLowerCase();
@@ -240,7 +247,7 @@ function shortenSummaryText(value) {
 // Encryption removed for now; payloads are stored in IPFS as plain JSON.
 
 // Health check
-app.get("/", (_req, res) => {
+app.get("/api/health", (_req, res) => {
   res.json({ status: "Care Connect backend running" });
 });
 
@@ -1394,6 +1401,23 @@ app.post("/api/blockchain/record", (req, res) => {
     res.status(500).json({ error: "Failed to append blockchain CSV" });
   }
 });
+
+// Serve compiled frontend when available (Railway single-service deployment).
+if (fs.existsSync(FRONTEND_DIST_DIR)) {
+  app.use(express.static(FRONTEND_DIST_DIR));
+
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.sendFile(FRONTEND_INDEX_FILE);
+  });
+} else {
+  app.get("/", (_req, res) => {
+    res.json({
+      status: "Care Connect backend running",
+      frontend: "not built",
+      hint: "Build frontend/dist to serve UI from this service"
+    });
+  });
+}
 
 
 
