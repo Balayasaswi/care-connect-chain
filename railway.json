@@ -1,6 +1,6 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "buildCommand": "npm --prefix backend install ; npm --prefix frontend install ; npm --prefix frontend run build"
+    "buildCommand": "if [ -f backend/package.json ]; then npm --prefix backend install && npm --prefix frontend install && npm --prefix frontend run build; else npm install && npm --prefix ../frontend install && npm --prefix ../frontend run build; fi"
   }
 }
