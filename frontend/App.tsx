@@ -8,7 +8,7 @@ import ChatWindow from './components/ChatWindow.tsx';
 import SessionList from './components/SessionList.tsx';
 import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle, Building2, Stethoscope, Bell } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 // --- Authentication View ---
 const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {

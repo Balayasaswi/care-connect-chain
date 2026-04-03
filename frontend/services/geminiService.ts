@@ -1,7 +1,7 @@
 import { ChatMessage, CounsellorRequest, CounsellorRequestUrgency, CounsellorSchedule, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, SessionRecord, SessionSummary } from "../types";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (window.location.hostname === "localhost" ? "http://localhost:5000" : window.location.origin);
 
 type IpfsPinResponse = {
   cid: string;
