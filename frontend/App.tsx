@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest, CounsellorSchedule } from './types.ts';
 import { gemini } from './services/geminiService.ts';
@@ -619,6 +619,9 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
   const [requestNotice, setRequestNotice] = useState('');
+  const [view, setView] = useState<'main' | 'notifications'>('main');
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchSummaries = async () => {
@@ -664,6 +667,24 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
     fetchSummaries();
   }, [user.studentEmail, user.studentId, user.email]);
 
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      return () => {
+        document.removeEventListener('mousedown', handleOutsideClick);
+      };
+    }
+
+    return undefined;
+  }, [isProfileMenuOpen]);
+
   const handleRequestCounsellor = async (session: SessionRecord) => {
     if (!user.studentId) return;
 
@@ -697,10 +718,68 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
           <Users className="text-indigo-600" size={24} />
           <span className="font-serif text-xl font-medium text-slate-900">Guardian Viewer</span>
         </div>
-        <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors p-2"><LogOut size={20} /></button>
+        <div className="relative" ref={profileMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+            className="w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors flex items-center justify-center"
+            aria-label="Open profile menu"
+          >
+            <UserIcon size={18} />
+          </button>
+
+          {isProfileMenuOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setView('notifications');
+                  setIsProfileMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-indigo-50 text-slate-700 text-sm font-medium"
+              >
+                <Bell size={16} className="text-indigo-600" />
+                Notifications
+              </button>
+
+              <div className="my-2 border-t border-slate-100" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  onLogout();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 text-sm font-medium"
+              >
+                <LogOut size={16} />
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </nav>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
+        {view === 'notifications' ? (
+          <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-5">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-5">
+              <div className="flex items-center gap-2">
+                <Bell className="text-indigo-600" size={18} />
+                <h2 className="text-xl font-serif text-slate-900">Notifications</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setView('main')}
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-700 hover:text-indigo-800"
+              >
+                <ChevronLeft size={14} />
+                Back
+              </button>
+            </div>
+            <p className="text-sm text-slate-500">No guardian notifications available right now.</p>
+          </div>
+        ) : (
         <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-6">
             <h2 className="text-2xl font-serif text-slate-800">Student Progress Report</h2>
@@ -769,6 +848,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
             Secure Guardian Terminal
           </div>
         </div>
+        )}
       </main>
     </div>
   );
@@ -778,7 +858,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
-  const [view, setView] = useState<'students' | 'student_detail'>('students');
+  const [view, setView] = useState<'students' | 'student_detail' | 'notifications'>('students');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -793,6 +873,8 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
   const [requestNotice, setRequestNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'ready'>('ready');
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const normalizedStudentSearch = studentSearch.trim().toLowerCase();
   const filteredStudents = students.filter((student) => {
@@ -819,6 +901,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
         })
     ).values()
   );
+  const pendingNotificationsCount = requests.filter((request) => request.status !== 'session_created').length;
 
   const toInputDateTime = (date: Date) => {
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -898,6 +981,24 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
     fetchSummaries();
   }, [user.email]);
 
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      return () => {
+        document.removeEventListener('mousedown', handleOutsideClick);
+      };
+    }
+
+    return undefined;
+  }, [isProfileMenuOpen]);
+
   const handleCreateSessionFromRequest = async (request: CounsellorRequest) => {
     setProcessingRequestId(request.id);
     setRequestNotice('');
@@ -964,7 +1065,53 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
           <Stethoscope className="text-teal-600" size={24} />
           <span className="font-serif text-xl font-medium text-slate-900">Counsellor Portal</span>
         </div>
-        <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors p-2"><LogOut size={20} /></button>
+        <div className="relative" ref={profileMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+            className="w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-teal-600 hover:border-teal-200 transition-colors flex items-center justify-center"
+            aria-label="Open profile menu"
+          >
+            <UserIcon size={18} />
+          </button>
+
+          {isProfileMenuOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setView('notifications');
+                  setIsProfileMenuOpen(false);
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-teal-50 text-slate-700"
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Bell size={16} className="text-teal-600" />
+                  Notifications
+                </span>
+                {pendingNotificationsCount > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold uppercase tracking-widest">
+                    {pendingNotificationsCount}
+                  </span>
+                )}
+              </button>
+
+              <div className="my-2 border-t border-slate-100" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  onLogout();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 text-sm font-medium"
+              >
+                <LogOut size={16} />
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </nav>
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="bg-white rounded-3xl p-8 border border-teal-100 shadow-sm space-y-6">
@@ -978,6 +1125,19 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                   {user.organization && <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">{user.organization}</span>}
                   <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-1 rounded font-bold uppercase tracking-widest">CLINICAL VIEW</span>
                 </div>
+              </>
+            ) : view === 'notifications' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setView('students')}
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-teal-700 hover:text-teal-800"
+                >
+                  <ChevronLeft size={14} />
+                  Back to Students
+                </button>
+                <h2 className="text-2xl font-serif text-slate-800 mt-3">Notifications</h2>
+                <p className="text-sm text-slate-500 mt-1">Escalation alerts and pending session scheduling requests.</p>
               </>
             ) : (
               <>
@@ -1148,6 +1308,36 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
             </div>
           )}
 
+          {view === 'notifications' && (
+            <div className="space-y-4 border-t border-slate-100 pt-6">
+              {pendingNotificationsCount === 0 ? (
+                <p className="text-sm text-slate-500">No pending notifications.</p>
+              ) : (
+                <div className="space-y-3">
+                  {requests
+                    .filter((request) => request.status !== 'session_created')
+                    .map((request) => (
+                      <div key={`notif_${request.id}`} className="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-800">
+                            {request.student_username || request.student_email || request.student_id}
+                          </p>
+                          <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest ${request.urgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {request.urgency}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          From {request.requested_by_role}: {request.requested_by_email}
+                        </p>
+                        {request.reason && <p className="text-sm text-slate-700">{request.reason}</p>}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {view !== 'notifications' && (
           <div className="space-y-4 border-t border-slate-100 pt-6">
             <h3 className="text-lg font-serif text-slate-900">Escalation Requests</h3>
             {requestNotice && (
@@ -1189,6 +1379,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
               </div>
             )}
           </div>
+          )}
 
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             <Lock size={12} />
@@ -1207,12 +1398,14 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'ready'>('ready');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
-  const [view, setView] = useState<'students' | 'student_summaries'>('students');
+  const [view, setView] = useState<'students' | 'student_summaries' | 'notifications'>('students');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
   const [requestNotice, setRequestNotice] = useState('');
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const normalizedStudentSearch = studentSearch.trim().toLowerCase();
   const filteredStudents = students.filter((student) => {
@@ -1226,6 +1419,24 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     const emotion = String(session.summary?.emotion || '').toUpperCase();
     return emotion === 'BAD' || emotion === 'CRITICAL';
   });
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+      return () => {
+        document.removeEventListener('mousedown', handleOutsideClick);
+      };
+    }
+
+    return undefined;
+  }, [isProfileMenuOpen]);
 
   const loadStudentSessions = async (student: CounsellorStudent) => {
     setSelectedStudent(student);
@@ -1318,7 +1529,46 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
           <Building2 className="text-amber-600" size={24} />
           <span className="font-serif text-xl font-medium text-slate-900">Institution Portal</span>
         </div>
-        <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors p-2"><LogOut size={20} /></button>
+        <div className="relative" ref={profileMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+            className="w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-amber-600 hover:border-amber-200 transition-colors flex items-center justify-center"
+            aria-label="Open profile menu"
+          >
+            <UserIcon size={18} />
+          </button>
+
+          {isProfileMenuOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setView('notifications');
+                  setIsProfileMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-amber-50 text-slate-700 text-sm font-medium"
+              >
+                <Bell size={16} className="text-amber-600" />
+                Notifications
+              </button>
+
+              <div className="my-2 border-t border-slate-100" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                  onLogout();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 text-sm font-medium"
+              >
+                <LogOut size={16} />
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </nav>
       <main className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-3xl p-8 border border-amber-100 shadow-sm space-y-6">
@@ -1332,6 +1582,19 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                   {user.collegeCode && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">COLLEGE CODE: {user.collegeCode}</span>}
                   <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-1 rounded font-bold uppercase tracking-widest">ADMIN VIEW</span>
                 </div>
+              </>
+            ) : view === 'notifications' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setView('students')}
+                  className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-700 hover:text-amber-800"
+                >
+                  <ChevronLeft size={14} />
+                  Back to Students
+                </button>
+                <h2 className="text-2xl font-serif text-slate-800 mt-3">Notifications</h2>
+                <p className="text-sm text-slate-500 mt-1">Institution alerts and escalations will appear here.</p>
               </>
             ) : (
               <>
@@ -1462,6 +1725,12 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
             </div>
           )}
 
+          {view === 'notifications' && (
+            <div className="space-y-4 border-t border-slate-100 pt-6">
+              <p className="text-sm text-slate-500">No institution notifications available right now.</p>
+            </div>
+          )}
+
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             <Lock size={12} />
             Secure Institution Terminal
@@ -1483,11 +1752,13 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const [walletError, setWalletError] = useState('');
   const [isConnectingWallet, setIsConnectingWallet] = useState(false);
   const [isStoringCid, setIsStoringCid] = useState<string | null>(null);
-  const [view, setView] = useState<'list' | 'chat' | 'view_session'>('list');
+  const [view, setView] = useState<'list' | 'chat' | 'view_session' | 'notifications'>('list');
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionIpfs, setActiveSessionIpfs] = useState<IpfsPinInfo | null>(null);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -1541,6 +1812,23 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       window.clearInterval(timer);
     };
   }, [user.id]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isProfileMenuOpen]);
 
   const saveSessions = (updated: SessionRecord[] | ((prev: SessionRecord[]) => SessionRecord[])) => {
     setSessions((prev) => (typeof updated === 'function' ? updated(prev) : updated));
@@ -1651,6 +1939,71 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       await handleMarkNotificationRead(item.id);
     }
   };
+
+  const renderNotificationsPanel = () => (
+    <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Bell className="text-indigo-600" size={18} />
+          <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-700">Notifications</h3>
+          {unreadNotificationsCount > 0 && (
+            <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-bold uppercase tracking-widest">
+              {unreadNotificationsCount} unread
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleMarkAllNotificationsRead}
+          disabled={unreadNotificationsCount === 0 || readingNotificationId !== null}
+          className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+        >
+          Mark all read
+        </button>
+      </div>
+      {notificationsLoading ? (
+        <p className="text-sm text-slate-500">Checking for counsellor updates...</p>
+      ) : notifications.length === 0 ? (
+        <p className="text-sm text-slate-500">No counsellor schedule notifications yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {notifications.map((item) => {
+            const scheduledAt = new Date(item.scheduled_for);
+            const when = Number.isNaN(scheduledAt.getTime())
+              ? item.scheduled_for
+              : scheduledAt.toLocaleString();
+
+            return (
+              <div key={item.id} className={`rounded-xl border px-3 py-2 ${item.student_read_at ? 'border-slate-200 bg-slate-50/70' : 'border-indigo-100 bg-indigo-50/60'}`}>
+                <p className="text-sm font-semibold text-indigo-900">
+                  Counsellor session scheduled at {when}
+                </p>
+                <p className="text-xs text-indigo-800 uppercase font-bold tracking-widest mt-1">
+                  Priority: {String(item.urgency || 'bad').toUpperCase()}
+                </p>
+                {item.notes && <p className="text-xs text-slate-600 mt-1">{item.notes}</p>}
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    {item.student_read_at ? 'Read' : 'Unread'}
+                  </span>
+                  {!item.student_read_at && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkNotificationRead(item.id)}
+                      disabled={readingNotificationId === item.id}
+                      className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      {readingNotificationId === item.id ? 'Saving...' : 'Mark read'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   const handleSessionCheckpoint = async (history: ChatMessage[]) => {
     if (!Array.isArray(history) || history.length === 0) return;
@@ -1800,11 +2153,53 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
               {isConnectingWallet ? 'Connecting...' : 'Connect Wallet'}
             </button>
           )}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100">
-            <UserIcon size={14} className="text-slate-400" />
-            <span className="text-xs text-slate-600 font-medium">{user.email}</span>
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+              className="w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors flex items-center justify-center"
+              aria-label="Open profile menu"
+            >
+              <UserIcon size={18} />
+            </button>
+
+            {isProfileMenuOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView('notifications');
+                    setIsProfileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-indigo-50 text-slate-700"
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Bell size={16} className="text-indigo-600" />
+                    Notifications
+                  </span>
+                  {unreadNotificationsCount > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold uppercase tracking-widest">
+                      {unreadNotificationsCount}
+                    </span>
+                  )}
+                </button>
+
+                <div className="my-2 border-t border-slate-100" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    onLogout();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 text-sm font-medium"
+                >
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
-          <button onClick={onLogout} className="p-2 text-slate-400 hover:text-rose-500 transition-colors"><LogOut size={20} /></button>
         </div>
       </nav>
 
@@ -1816,69 +2211,6 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 {walletError}
               </div>
             )}
-
-            <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Bell className="text-indigo-600" size={18} />
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-700">Notifications</h3>
-                  {unreadNotificationsCount > 0 && (
-                    <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-bold uppercase tracking-widest">
-                      {unreadNotificationsCount} unread
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleMarkAllNotificationsRead}
-                  disabled={unreadNotificationsCount === 0 || readingNotificationId !== null}
-                  className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
-                >
-                  Mark all read
-                </button>
-              </div>
-              {notificationsLoading ? (
-                <p className="text-sm text-slate-500">Checking for counsellor updates...</p>
-              ) : notifications.length === 0 ? (
-                <p className="text-sm text-slate-500">No counsellor schedule notifications yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {notifications.map((item) => {
-                    const scheduledAt = new Date(item.scheduled_for);
-                    const when = Number.isNaN(scheduledAt.getTime())
-                      ? item.scheduled_for
-                      : scheduledAt.toLocaleString();
-
-                    return (
-                      <div key={item.id} className={`rounded-xl border px-3 py-2 ${item.student_read_at ? 'border-slate-200 bg-slate-50/70' : 'border-indigo-100 bg-indigo-50/60'}`}>
-                        <p className="text-sm font-semibold text-indigo-900">
-                          Counsellor session scheduled at {when}
-                        </p>
-                        <p className="text-xs text-indigo-800 uppercase font-bold tracking-widest mt-1">
-                          Priority: {String(item.urgency || 'bad').toUpperCase()}
-                        </p>
-                        {item.notes && <p className="text-xs text-slate-600 mt-1">{item.notes}</p>}
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                            {item.student_read_at ? 'Read' : 'Unread'}
-                          </span>
-                          {!item.student_read_at && (
-                            <button
-                              type="button"
-                              onClick={() => handleMarkNotificationRead(item.id)}
-                              disabled={readingNotificationId === item.id}
-                              className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-                            >
-                              {readingNotificationId === item.id ? 'Saving...' : 'Mark read'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
 
             <div className="flex justify-between items-center">
               <div>
@@ -1905,6 +2237,18 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
               showSummary={false} 
             />
 
+          </div>
+        )}
+
+        {view === 'notifications' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <button
+              onClick={() => setView('list')}
+              className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors text-sm"
+            >
+              <ChevronLeft size={16} /> Back to Conversations
+            </button>
+            {renderNotificationsPanel()}
           </div>
         )}
 
