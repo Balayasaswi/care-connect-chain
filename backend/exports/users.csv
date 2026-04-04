@@ -1,1 +1,3 @@
-id,username,email,created_at
+id,username,email,institution_access_code,institution_college_code,created_at
+423ffc038fea4415a5b44ebe1171c6e8,abc123,abc123@gmail.com,CC-ABCD123,CC-KH7X2Z,2026-03-31 05:52:40
+65d29b5ef56c461081e7687021cf37d1,bala_yasaswi,balayasaswi352@gmail.com,CC-ABC123,CC-X2F9EA,2026-03-30 09:04:37

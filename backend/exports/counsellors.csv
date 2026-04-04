@@ -1,1 +1,3 @@
-counsellor_email,student_id,crr_number,organization,created_at
+counsellor_email,crr_number,aishe_code,udise_code,organization,created_at
+counsellor@mail.org,CRR1234567,CC-ABCD123,,,2026-03-31 06:17:19
+councellor@mail.org,CRR123456,CC-ABC123,,,2026-03-30 15:59:01
