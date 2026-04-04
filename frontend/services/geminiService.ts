@@ -1,4 +1,4 @@
-import { ChatMessage, CounsellorRequest, CounsellorRequestUrgency, CounsellorSchedule, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, SessionRecord, SessionSummary } from "../types";
+import { ChatMessage, CounsellorRequest, CounsellorRequestUrgency, CounsellorSchedule, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, OnChainRecord, SessionRecord, SessionSummary } from "../types";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (window.location.hostname === "localhost" ? "http://localhost:5000" : window.location.origin);
@@ -12,14 +12,22 @@ type IpfsPinResponse = {
 };
 
 type BlockchainRecordPayload = {
-  chainId: number;
-  address: string;
-  txHash: string;
-  timestamp: string;
   userId?: string;
   sessionId?: string;
   cid?: string;
-  contractAddress?: string;
+};
+
+type BlockchainRecordResponse = {
+  success: boolean;
+  skipped?: boolean;
+  record?: OnChainRecord & {
+    studentId?: string;
+    sessionId?: string;
+    cid?: string;
+    address?: string;
+    contractAddress?: string;
+  };
+  error?: string;
 };
 
 type SessionPinPayload = {
@@ -140,7 +148,7 @@ class GeminiService {
   }
 
   async recordBlockchainTx(payload: BlockchainRecordPayload): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE_URL}/api/blockchain/record`, {
+    const res = await fetch(`${API_BASE_URL}/api/blockchain/store-cid`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -151,6 +159,23 @@ class GeminiService {
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(`Blockchain record error: ${errText}`);
+    }
+
+    return res.json();
+  }
+
+  async storeSessionCidOnChain(payload: BlockchainRecordPayload): Promise<BlockchainRecordResponse> {
+    const res = await fetch(`${API_BASE_URL}/api/blockchain/store-cid`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Blockchain store error: ${errText}`);
     }
 
     return res.json();

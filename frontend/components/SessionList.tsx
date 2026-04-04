@@ -7,14 +7,12 @@ interface SessionListProps {
   sessions: SessionRecord[];
   onSelect: (session: SessionRecord) => void;
   onDelete?: (session: SessionRecord) => void;
-  onStoreCid?: (session: SessionRecord) => void;
   onRequestCounsellor?: (session: SessionRecord) => void;
   requestingSessionId?: string | null;
-  storingSessionId?: string | null;
   showSummary?: boolean;
 }
 
-const SessionList: React.FC<SessionListProps> = ({ sessions, onSelect, onDelete, onStoreCid, onRequestCounsellor, requestingSessionId, storingSessionId, showSummary = true }) => {
+const SessionList: React.FC<SessionListProps> = ({ sessions, onSelect, onDelete, onRequestCounsellor, requestingSessionId, showSummary = true }) => {
   if (sessions.length === 0) {
     return (
       <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 shadow-sm">
@@ -93,26 +91,10 @@ const SessionList: React.FC<SessionListProps> = ({ sessions, onSelect, onDelete,
                   Delete
                 </button>
               )}
-              {!showSummary && onStoreCid && session.ipfs?.cid && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (!session.onChain && storingSessionId !== session.id) {
-                      onStoreCid(session);
-                    }
-                  }}
-                  className={`text-[10px] font-bold uppercase tracking-widest ${session.onChain ? 'text-emerald-500' : 'text-indigo-600 hover:text-indigo-700'}`}
-                  aria-label="Store CID on-chain"
-                  disabled={Boolean(session.onChain) || storingSessionId === session.id}
-                >
-                  {session.onChain
-                    ? 'Stored'
-                    : storingSessionId === session.id
-                      ? 'Storing...'
-                      : 'Store CID'}
-                </button>
+              {!showSummary && session.onChain && (
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                  Secured
+                </span>
               )}
               {onRequestCounsellor && ['CRITICAL', 'BAD'].includes(session.summary?.emotion || '') && (
                 <button

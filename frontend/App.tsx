@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest, CounsellorSchedule } from './types.ts';
 import { gemini } from './services/geminiService.ts';
-import { connectWallet, storeCidToChain } from './services/chainService.ts';
 import ChatWindow from './components/ChatWindow.tsx';
 import SessionList from './components/SessionList.tsx';
 import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle, Building2, Stethoscope, Bell } from 'lucide-react';
@@ -1748,10 +1747,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [readingNotificationId, setReadingNotificationId] = useState<string | null>(null);
   const [deletedSessionIds, setDeletedSessionIds] = useState<string[]>([]);
-  const [walletAddress, setWalletAddress] = useState('');
-  const [walletError, setWalletError] = useState('');
-  const [isConnectingWallet, setIsConnectingWallet] = useState(false);
-  const [isStoringCid, setIsStoringCid] = useState<string | null>(null);
+  const [chainStatusError, setChainStatusError] = useState('');
   const [view, setView] = useState<'list' | 'chat' | 'view_session' | 'notifications'>('list');
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -1836,80 +1832,6 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
 
   const handleDeleteSession = (sessionId: string) => {
     setDeletedSessionIds((prev) => (prev.includes(sessionId) ? prev : [sessionId, ...prev]));
-  };
-
-  const ensureWallet = async () => {
-    if (walletAddress) return walletAddress;
-    const { address } = await connectWallet();
-    setWalletAddress(address);
-    return address;
-  };
-
-  const handleConnectWallet = async () => {
-    setIsConnectingWallet(true);
-    setWalletError('');
-    try {
-      const { address } = await connectWallet();
-      setWalletAddress(address);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Wallet connection failed.';
-      setWalletError(message);
-    } finally {
-      setIsConnectingWallet(false);
-    }
-  };
-
-  const handleStoreCid = async (session: SessionRecord) => {
-    if (!session.ipfs?.cid || session.onChain) return;
-    setIsStoringCid(session.id);
-    setWalletError('');
-
-    try {
-      const address = await ensureWallet();
-      const contractAddress = import.meta.env.VITE_CID_CONTRACT_ADDRESS as string | undefined;
-      if (!contractAddress) {
-        throw new Error('Missing VITE_CID_CONTRACT_ADDRESS in frontend env.');
-      }
-
-      const { txHash, chainId } = await storeCidToChain(session.ipfs.cid, contractAddress);
-      const storedAt = new Date().toISOString();
-
-      try {
-        await gemini.recordBlockchainTx({
-          chainId,
-          address,
-          txHash,
-          timestamp: storedAt,
-          userId: user.id,
-          sessionId: session.id,
-          cid: session.ipfs.cid,
-          contractAddress
-        });
-      } catch (recordError) {
-        console.warn("Blockchain CSV record error:", recordError);
-        setWalletError("Stored on-chain, but failed to update blockchain CSV.");
-      }
-
-      const updated = sessions.map((item) =>
-        item.id === session.id
-          ? {
-              ...item,
-              onChain: {
-                txHash,
-                chainId,
-                contractAddress,
-                storedAt
-              }
-            }
-          : item
-      );
-      saveSessions(updated);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to store CID.';
-      setWalletError(message);
-    } finally {
-      setIsStoringCid(null);
-    }
   };
 
   const visibleSessions = sessions.filter(
@@ -2043,6 +1965,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
 
   const handleSessionEnd = async (history: ChatMessage[]) => {
     setIsProcessing(true);
+    setChainStatusError('');
     try {
       const sessionId = activeSessionId || `session_${Date.now()}`;
       const nowIso = new Date().toISOString();
@@ -2069,6 +1992,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         end_time_stamp: endTimestamp
       };
       let ipfs: IpfsPinInfo | undefined = activeSessionIpfs || undefined;
+      let onChain: SessionRecord['onChain'] | undefined;
 
       try {
         const pinnedAt = new Date().toISOString();
@@ -2086,6 +2010,28 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
             gatewayUrl: ipfsResult.gatewayUrl,
             pinnedAt
           };
+        }
+
+        if (ipfs?.cid) {
+          try {
+            const chainResult = await gemini.storeSessionCidOnChain({
+              userId: user.id,
+              sessionId,
+              cid: ipfs.cid
+            });
+
+            if (chainResult.record) {
+              onChain = {
+                txHash: chainResult.record.txHash,
+                chainId: Number(chainResult.record.chainId) || 0,
+                contractAddress: chainResult.record.contractAddress || '',
+                storedAt: chainResult.record.timestamp || pinnedAt
+              };
+            }
+          } catch (chainError) {
+            console.error("Blockchain store error:", chainError);
+            setChainStatusError('Server could not complete blockchain proof for this session.');
+          }
         }
 
         await gemini.archiveSession({
@@ -2116,7 +2062,8 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         summary,
         history,
         status: 'completed',
-        ...(ipfs ? { ipfs } : {})
+        ...(ipfs ? { ipfs } : {}),
+        ...(onChain ? { onChain } : {})
       };
       saveSessions((prev) => [newSession, ...prev]);
     } catch (e) {
@@ -2137,22 +2084,10 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
           <span className="font-serif text-xl font-medium text-slate-900">Care Connect Chain</span>
         </div>
         <div className="flex items-center gap-4">
-          {walletAddress ? (
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Wallet</span>
-              <span className="text-xs text-emerald-700 font-medium">
-                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-              </span>
-            </div>
-          ) : (
-            <button
-              onClick={handleConnectWallet}
-              disabled={isConnectingWallet}
-              className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-60"
-            >
-              {isConnectingWallet ? 'Connecting...' : 'Connect Wallet'}
-            </button>
-          )}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Server-secured</span>
+            <span className="text-xs text-emerald-700 font-medium">No wallet required</span>
+          </div>
           <div className="relative" ref={profileMenuRef}>
             <button
               type="button"
@@ -2206,9 +2141,9 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       <main className="max-w-6xl mx-auto px-4 py-8">
         {view === 'list' && (
           <div className="space-y-8">
-            {walletError && (
+            {chainStatusError && (
               <div className="rounded-2xl border border-rose-100 bg-rose-50 text-rose-700 px-4 py-3 text-sm">
-                {walletError}
+                {chainStatusError}
               </div>
             )}
 
@@ -2232,8 +2167,6 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
               sessions={visibleSessions} 
               onSelect={(s) => { setSelectedSession(s); setView('view_session'); }} 
               onDelete={(s) => handleDeleteSession(s.id)}
-              onStoreCid={(s) => handleStoreCid(s)}
-              storingSessionId={isStoringCid}
               showSummary={false} 
             />
 

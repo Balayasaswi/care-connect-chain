@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
+import { Contract, JsonRpcProvider, Wallet } from "ethers";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -25,6 +26,13 @@ const IPFS_READ_GATEWAYS = String(process.env.IPFS_READ_GATEWAYS || `${IPFS_GATE
   .split(",")
   .map((item) => item.trim().replace(/\/$/, ""))
   .filter(Boolean);
+const CID_REGISTRY_ABI = [
+  "function storeCid(string cid) external"
+];
+const BLOCKCHAIN_RPC_URL = String(process.env.BLOCKCHAIN_RPC_URL || "").trim();
+const BLOCKCHAIN_PRIVATE_KEY = String(process.env.BLOCKCHAIN_PRIVATE_KEY || "").trim();
+const CID_REGISTRY_CONTRACT_ADDRESS = String(process.env.CID_REGISTRY_CONTRACT_ADDRESS || process.env.CID_CONTRACT_ADDRESS || "").trim();
+const BLOCKCHAIN_CHAIN_ID = parsePositiveInt(process.env.BLOCKCHAIN_CHAIN_ID, 0);
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -33,6 +41,8 @@ function parsePositiveInt(value, fallback) {
 
 const IPFS_FETCH_TIMEOUT_MS = parsePositiveInt(process.env.IPFS_FETCH_TIMEOUT_MS, 2500);
 const IPFS_FETCH_CONCURRENCY = parsePositiveInt(process.env.IPFS_FETCH_CONCURRENCY, 6);
+
+let blockchainClient = null;
 
 app.use(cors());
 app.use(express.json());
@@ -226,6 +236,91 @@ async function fetchIpfsEntries(entries) {
       return { entry, payload: null, error };
     }
   });
+}
+
+function getBlockchainClient() {
+  if (blockchainClient) {
+    return blockchainClient;
+  }
+
+  if (!BLOCKCHAIN_RPC_URL || !BLOCKCHAIN_PRIVATE_KEY || !CID_REGISTRY_CONTRACT_ADDRESS) {
+    return null;
+  }
+
+  const provider = new JsonRpcProvider(BLOCKCHAIN_RPC_URL);
+  const wallet = new Wallet(BLOCKCHAIN_PRIVATE_KEY, provider);
+  const contract = new Contract(CID_REGISTRY_CONTRACT_ADDRESS, CID_REGISTRY_ABI, wallet);
+
+  blockchainClient = { provider, wallet, contract };
+  return blockchainClient;
+}
+
+async function storeCidOnChain({ cid, studentId = "", sessionId = "" }) {
+  const client = getBlockchainClient();
+  if (!client) {
+    return {
+      success: false,
+      error: "Blockchain storage is not configured"
+    };
+  }
+
+  if (!cid) {
+    return {
+      success: false,
+      error: "CID is required"
+    };
+  }
+
+  if (BLOCKCHAIN_CHAIN_ID) {
+    const network = await client.provider.getNetwork();
+    if (Number(network.chainId) !== BLOCKCHAIN_CHAIN_ID) {
+      return {
+        success: false,
+        error: `Blockchain RPC chainId ${Number(network.chainId)} does not match configured chainId ${BLOCKCHAIN_CHAIN_ID}`
+      };
+    }
+  }
+
+  const existingEntries = String(studentId || "").trim()
+    ? readBlockchainEntriesByStudent(studentId).filter((entry) => String(entry.cid || "") === String(cid))
+    : [];
+
+  if (existingEntries.length) {
+    return {
+      success: true,
+      skipped: true,
+      record: existingEntries[0]
+    };
+  }
+
+  const transaction = await client.contract.storeCid(cid);
+  const receipt = await transaction.wait();
+
+  if (!receipt || receipt.status !== 1) {
+    throw new Error("Blockchain transaction failed");
+  }
+
+  const network = await client.provider.getNetwork();
+  const block = receipt.blockNumber ? await client.provider.getBlock(receipt.blockNumber) : null;
+  const address = await client.wallet.getAddress();
+  const timestamp = block?.timestamp ? new Date(Number(block.timestamp) * 1000).toISOString() : new Date().toISOString();
+  const record = {
+    chainId: Number(network.chainId) || BLOCKCHAIN_CHAIN_ID || 0,
+    address,
+    txHash: receipt.hash,
+    timestamp,
+    studentId: String(studentId || ""),
+    sessionId: String(sessionId || ""),
+    cid: String(cid || ""),
+    contractAddress: CID_REGISTRY_CONTRACT_ADDRESS
+  };
+
+  appendBlockchainCsv(record);
+
+  return {
+    success: true,
+    record
+  };
 }
 
 let groqClient = null;
@@ -1542,6 +1637,34 @@ app.post("/api/blockchain/record", (req, res) => {
   } catch (error) {
     console.error("Blockchain CSV append failed:", error);
     res.status(500).json({ error: "Failed to append blockchain CSV" });
+  }
+});
+
+app.post("/api/blockchain/store-cid", async (req, res) => {
+  try {
+    const { cid, userId, sessionId } = req.body || {};
+    const normalizedCid = String(cid || "").trim();
+    const normalizedUserId = String(userId || "").trim();
+    const normalizedSessionId = String(sessionId || "").trim();
+
+    if (!normalizedCid) {
+      return res.status(400).json({ error: "cid is required" });
+    }
+
+    const result = await storeCidOnChain({
+      cid: normalizedCid,
+      studentId: normalizedUserId,
+      sessionId: normalizedSessionId
+    });
+
+    if (!result.success) {
+      return res.status(result.skipped ? 200 : 400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error("Blockchain store-cid error:", error);
+    res.status(500).json({ error: "Failed to store CID on-chain" });
   }
 });
 

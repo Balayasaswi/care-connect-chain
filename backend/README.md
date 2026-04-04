@@ -134,6 +134,22 @@ Content-Type: application/json
 }
 ```
 
+### Blockchain
+
+#### Store CID On-Chain
+```http
+POST /api/blockchain/store-cid
+Content-Type: application/json
+
+{
+  "cid": "bafy...",
+  "userId": "student-id",
+  "sessionId": "session-123"
+}
+```
+
+This route uses a server-held wallet to call the CID registry contract. The browser does not need MetaMask.
+
 ## Setup
 
 1. Install dependencies:
@@ -159,6 +175,12 @@ IPFS_READ_GATEWAYS=http://127.0.0.1:8080/ipfs,https://gateway.pinata.cloud/ipfs
 # PINATA_JWT=your_pinata_jwt_here
 # PINATA_API_KEY=your_pinata_api_key_here
 # PINATA_API_SECRET=your_pinata_api_secret_here
+
+# Optional: server-side blockchain proof
+# BLOCKCHAIN_RPC_URL=https://your-rpc-endpoint
+# BLOCKCHAIN_PRIVATE_KEY=0xyourserverwalletprivatekey
+# CID_REGISTRY_CONTRACT_ADDRESS=0xyourdeployedcidregistry
+# BLOCKCHAIN_CHAIN_ID=80002
 ```
 
 3. Start server:
