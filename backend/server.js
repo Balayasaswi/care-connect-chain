@@ -26,6 +26,14 @@ const IPFS_READ_GATEWAYS = String(process.env.IPFS_READ_GATEWAYS || `${IPFS_GATE
   .map((item) => item.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const IPFS_FETCH_TIMEOUT_MS = parsePositiveInt(process.env.IPFS_FETCH_TIMEOUT_MS, 2500);
+const IPFS_FETCH_CONCURRENCY = parsePositiveInt(process.env.IPFS_FETCH_CONCURRENCY, 6);
+
 app.use(cors());
 app.use(express.json());
 
@@ -162,20 +170,62 @@ async function pinJsonToIpfs(data, name, metadata, options) {
 async function fetchIpfsJson(cid) {
   let lastError = null;
   for (const gateway of IPFS_READ_GATEWAYS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), IPFS_FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(resolveGatewayUrl(cid, gateway));
-      if (!response.ok) continue;
+      const response = await fetch(resolveGatewayUrl(cid, gateway), {
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        lastError = new Error(`Gateway ${gateway} returned ${response.status}`);
+        continue;
+      }
       return await response.json();
     } catch (error) {
       lastError = error;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
   if (lastError) {
-    throw lastError;
+    throw new Error(`Unable to fetch CID ${cid}: ${lastError.message || lastError}`);
   }
 
   throw new Error("Unable to fetch CID from configured gateways");
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  const results = new Array(items.length);
+  let currentIndex = 0;
+
+  const runners = Array.from({ length: limit }, async () => {
+    while (true) {
+      const index = currentIndex;
+      currentIndex += 1;
+      if (index >= items.length) break;
+      results[index] = await worker(items[index], index);
+    }
+  });
+
+  await Promise.all(runners);
+  return results;
+}
+
+async function fetchIpfsEntries(entries) {
+  return mapWithConcurrency(entries, IPFS_FETCH_CONCURRENCY, async (entry) => {
+    try {
+      const payload = await fetchIpfsJson(entry.cid);
+      return { entry, payload, error: null };
+    } catch (error) {
+      return { entry, payload: null, error };
+    }
+  });
 }
 
 let groqClient = null;
@@ -580,14 +630,15 @@ app.get("/api/guardian/summaries", async (req, res) => {
 
     const summaries = [];
     if (entries.length) {
-      for (const entry of entries) {
-        try {
-          const payload = await fetchIpfsJson(entry.cid);
-          if (payload?.summary) {
-            summaries.push(payload.summary);
-          }
-        } catch (decryptError) {
-          console.warn("Guardian summary read failed:", decryptError.message || decryptError);
+      const entryResults = await fetchIpfsEntries(entries);
+      for (const result of entryResults) {
+        if (result.error) {
+          console.warn("Guardian summary read failed:", result.error.message || result.error);
+          continue;
+        }
+
+        if (result.payload?.summary) {
+          summaries.push(result.payload.summary);
         }
       }
     }
@@ -669,37 +720,40 @@ app.get("/api/sessions", async (req, res) => {
     const sessions = [];
     const failedEntries = [];
     if (entries.length) {
-      for (const entry of entries) {
-        try {
-          const payload = await fetchIpfsJson(entry.cid);
-          if (!payload?.summary || !payload?.history) continue;
-
-          const pinnedAt = payload.pinnedAt || entry.timestamp || new Date().toISOString();
-          const onChain = onChainByCid.get(entry.cid);
-          sessions.push({
-            id: payload.sessionId || `ipfs_${entry.cid}`,
-            summary: payload.summary,
-            history: redactHistory ? [] : payload.history,
-            status: "completed",
-            ipfs: {
-              cid: entry.cid,
-              uri: `ipfs://${entry.cid}`,
-              gatewayUrl: resolveGatewayUrl(entry.cid),
-              pinnedAt
-            },
-            ...(onChain && onChain.txHash ? {
-              onChain: {
-                txHash: onChain.txHash,
-                chainId: Number(onChain.chainId) || 0,
-                contractAddress: onChain.contractAddress || "",
-                storedAt: onChain.timestamp || pinnedAt
-              }
-            } : {})
-          });
-        } catch (sessionError) {
-          console.warn("Session fetch failed:", sessionError.message || sessionError);
+      const entryResults = await fetchIpfsEntries(entries);
+      for (const result of entryResults) {
+        const entry = result.entry;
+        if (result.error) {
+          console.warn("Session fetch failed:", result.error.message || result.error);
           failedEntries.push(entry);
+          continue;
         }
+
+        const payload = result.payload;
+        if (!payload?.summary || !payload?.history) continue;
+
+        const pinnedAt = payload.pinnedAt || entry.timestamp || new Date().toISOString();
+        const onChain = onChainByCid.get(entry.cid);
+        sessions.push({
+          id: payload.sessionId || `ipfs_${entry.cid}`,
+          summary: payload.summary,
+          history: redactHistory ? [] : payload.history,
+          status: "completed",
+          ipfs: {
+            cid: entry.cid,
+            uri: `ipfs://${entry.cid}`,
+            gatewayUrl: resolveGatewayUrl(entry.cid),
+            pinnedAt
+          },
+          ...(onChain && onChain.txHash ? {
+            onChain: {
+              txHash: onChain.txHash,
+              chainId: Number(onChain.chainId) || 0,
+              contractAddress: onChain.contractAddress || "",
+              storedAt: onChain.timestamp || pinnedAt
+            }
+          } : {})
+        });
       }
     }
 
@@ -908,17 +962,23 @@ app.get("/api/counsellor/summaries", async (req, res) => {
     if (!entries.length) return res.json({ summaries: [] });
 
     const seenCids = new Set();
-    const summaries = [];
+    const filteredEntries = [];
     for (const entry of entries) {
       if (!allowedStudentIds.has(String(entry.studentId || ""))) continue;
       if (!entry.cid || seenCids.has(entry.cid)) continue;
       seenCids.add(entry.cid);
-      try {
-        const payload = await fetchIpfsJson(entry.cid);
-        if (payload?.summary) summaries.push(payload.summary);
-      } catch (e) {
-        console.warn("Counsellor summary read failed:", e.message || e);
+      filteredEntries.push(entry);
+    }
+
+    const summaries = [];
+    const entryResults = await fetchIpfsEntries(filteredEntries);
+    for (const result of entryResults) {
+      if (result.error) {
+        console.warn("Counsellor summary read failed:", result.error.message || result.error);
+        continue;
       }
+
+      if (result.payload?.summary) summaries.push(result.payload.summary);
     }
     res.json({ summaries });
   } catch (error) {
@@ -980,26 +1040,34 @@ app.post("/api/counsellor/requests/:requestId/create-session", (req, res) => {
       return res.status(400).json({ error: "requestId and counsellor_email are required" });
     }
 
-    const result = updateCounsellorRequestStatus(requestId, "session_created", counsellorEmail);
-    if (!result.success) {
-      return res.status(400).json({ error: result.error });
+    const counsellor = getCounsellorByEmail(counsellorEmail);
+    if (!counsellor) {
+      return res.status(404).json({ error: "Counsellor not found" });
     }
 
-    const urgency = String(result.request?.urgency || "").toLowerCase();
-    const supportWindow = urgency === "critical" ? "within 30 minutes" : "within 24 hours";
+    const listResult = listCounsellorRequestsForCounsellor(counsellorEmail);
+    if (!listResult.success) {
+      return res.status(400).json({ error: listResult.error });
+    }
 
-    res.json({
-      success: true,
-      request: result.request,
-      sessionPlan: {
-        type: "support-session",
-        priority: urgency || "bad",
-        recommendedStart: supportWindow
-      }
-    });
+    const request = (listResult.requests || []).find((item) => item.id === requestId);
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    if (request.status === "session_created") {
+      return res.status(200).json({ success: true, request });
+    }
+
+    const updateResult = updateCounsellorRequestStatus(requestId, "session_created", counsellorEmail);
+    if (!updateResult.success) {
+      return res.status(400).json({ error: updateResult.error });
+    }
+
+    res.json({ success: true, request: updateResult.request });
   } catch (error) {
     console.error("Counsellor create-session error:", error);
-    res.status(500).json({ error: "Failed to create support session" });
+    res.status(500).json({ error: "Failed to update request status" });
   }
 });
 
@@ -1023,7 +1091,7 @@ app.post("/api/counsellor/schedules", (req, res) => {
     res.json({ success: true, schedule: result.schedule });
   } catch (error) {
     console.error("Counsellor schedule create error:", error);
-    res.status(500).json({ error: "Failed to create counsellor schedule" });
+    res.status(500).json({ error: "Failed to create schedule" });
   }
 });
 
@@ -1031,8 +1099,11 @@ app.get("/api/counsellor/schedules", (req, res) => {
   try {
     const counsellorEmail = String(req.query.counsellor_email || "").toLowerCase().trim();
     const studentId = String(req.query.student_id || "").trim();
+    if (!counsellorEmail) {
+      return res.status(400).json({ error: "counsellor_email is required" });
+    }
 
-    const result = listCounsellorSchedules(counsellorEmail, studentId);
+    const result = listCounsellorSchedules(counsellorEmail, studentId || null);
     if (!result.success) {
       return res.status(400).json({ error: result.error });
     }
@@ -1040,13 +1111,17 @@ app.get("/api/counsellor/schedules", (req, res) => {
     res.json({ schedules: result.schedules || [] });
   } catch (error) {
     console.error("Counsellor schedule list error:", error);
-    res.status(500).json({ error: "Failed to fetch counsellor schedules" });
+    res.status(500).json({ error: "Failed to fetch schedules" });
   }
 });
 
 app.get("/api/student/notifications", (req, res) => {
   try {
     const studentId = String(req.query.student_id || "").trim();
+    if (!studentId) {
+      return res.status(400).json({ error: "student_id is required" });
+    }
+
     const result = listCounsellorSchedulesForStudent(studentId);
     if (!result.success) {
       return res.status(400).json({ error: result.error });
@@ -1055,7 +1130,7 @@ app.get("/api/student/notifications", (req, res) => {
     res.json({ notifications: result.schedules || [] });
   } catch (error) {
     console.error("Student notifications error:", error);
-    res.status(500).json({ error: "Failed to fetch student notifications" });
+    res.status(500).json({ error: "Failed to fetch notifications" });
   }
 });
 
@@ -1063,6 +1138,10 @@ app.post("/api/student/notifications/:scheduleId/read", (req, res) => {
   try {
     const scheduleId = String(req.params.scheduleId || "").trim();
     const studentId = String(req.body?.student_id || "").trim();
+
+    if (!scheduleId || !studentId) {
+      return res.status(400).json({ error: "scheduleId and student_id are required" });
+    }
 
     const result = markCounsellorScheduleReadByStudent(scheduleId, studentId);
     if (!result.success) {
@@ -1072,7 +1151,7 @@ app.post("/api/student/notifications/:scheduleId/read", (req, res) => {
     res.json({ success: true, notification: result.schedule });
   } catch (error) {
     console.error("Student notification read error:", error);
-    res.status(500).json({ error: "Failed to mark student notification as read" });
+    res.status(500).json({ error: "Failed to mark notification as read" });
   }
 });
 
@@ -1088,7 +1167,6 @@ app.post("/api/institution/register", async (req, res) => {
     if (!resolvedCode) {
       return res.status(400).json({ error: "access_code is required" });
     }
-
     const result = await registerInstitution(
       String(institution_email).toLowerCase().trim(),
       String(institution_password),
@@ -1096,7 +1174,7 @@ app.post("/api/institution/register", async (req, res) => {
       resolvedCode
     );
     if (!result.success) return res.status(400).json({ error: result.error });
-    res.json({ success: true, college_code: result.collegeCode });
+    res.json({ success: true, college_code: result.collegeCode, institution: result.institution });
   } catch (error) {
     console.error("Institution registration error:", error);
     res.status(500).json({ error: "Institution registration failed" });
@@ -1136,19 +1214,27 @@ app.get("/api/institution/summaries", async (req, res) => {
 
     const entries = readAllIpfsEntries();
     const seenCids = new Set();
-    const summaries = [];
+    const filteredEntries = [];
 
     if (entries.length) {
       for (const entry of entries) {
         if (!allowedStudentIds.has(String(entry.studentId || ""))) continue;
         if (!entry.cid || seenCids.has(entry.cid)) continue;
         seenCids.add(entry.cid);
-        try {
-          const payload = await fetchIpfsJson(entry.cid);
-          if (payload?.summary) summaries.push(payload.summary);
-        } catch (e) {
-          console.warn("Institution summary read failed:", e.message || e);
+        filteredEntries.push(entry);
+      }
+    }
+
+    const summaries = [];
+    if (filteredEntries.length) {
+      const entryResults = await fetchIpfsEntries(filteredEntries);
+      for (const result of entryResults) {
+        if (result.error) {
+          console.warn("Institution summary read failed:", result.error.message || result.error);
+          continue;
         }
+
+        if (result.payload?.summary) summaries.push(result.payload.summary);
       }
     }
 
