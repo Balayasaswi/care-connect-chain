@@ -667,6 +667,7 @@ app.get("/api/sessions", async (req, res) => {
     }
 
     const sessions = [];
+    const failedEntries = [];
     if (entries.length) {
       for (const entry of entries) {
         try {
@@ -697,38 +698,94 @@ app.get("/api/sessions", async (req, res) => {
           });
         } catch (sessionError) {
           console.warn("Session fetch failed:", sessionError.message || sessionError);
+          failedEntries.push(entry);
         }
       }
     }
 
-    if (!sessions.length && archivedSessions.length) {
-      for (const archived of archivedSessions) {
-        const cid = String(archived.cid || "").trim();
-        const onChain = cid ? onChainByCid.get(cid) : null;
-        sessions.push({
-          id: archived.id,
-          summary: archived.summary,
-          history: redactHistory ? [] : archived.history,
-          status: "completed",
-          ...(cid ? {
-            ipfs: {
-              cid,
-              uri: `ipfs://${cid}`,
-              gatewayUrl: resolveGatewayUrl(cid),
-              pinnedAt: archived.pinnedAt || new Date().toISOString()
-            }
-          } : {}),
-          ...(onChain && onChain.txHash ? {
-            onChain: {
-              txHash: onChain.txHash,
-              chainId: Number(onChain.chainId) || 0,
-              contractAddress: onChain.contractAddress || "",
-              storedAt: onChain.timestamp || archived.pinnedAt || new Date().toISOString()
-            }
-          } : {})
-        });
-      }
+    const sessionIds = new Set(sessions.map((session) => String(session.id || "").trim()).filter(Boolean));
+    const cidsInSessions = new Set(
+      sessions
+        .map((session) => String(session?.ipfs?.cid || "").trim())
+        .filter(Boolean)
+    );
+
+    for (const archived of archivedSessions) {
+      const archivedId = String(archived.id || "").trim();
+      const cid = String(archived.cid || "").trim();
+      if (archivedId && sessionIds.has(archivedId)) continue;
+      if (cid && cidsInSessions.has(cid)) continue;
+
+      const onChain = cid ? onChainByCid.get(cid) : null;
+      sessions.push({
+        id: archived.id,
+        summary: archived.summary,
+        history: redactHistory ? [] : archived.history,
+        status: "completed",
+        ...(cid ? {
+          ipfs: {
+            cid,
+            uri: `ipfs://${cid}`,
+            gatewayUrl: resolveGatewayUrl(cid),
+            pinnedAt: archived.pinnedAt || new Date().toISOString()
+          }
+        } : {}),
+        ...(onChain && onChain.txHash ? {
+          onChain: {
+            txHash: onChain.txHash,
+            chainId: Number(onChain.chainId) || 0,
+            contractAddress: onChain.contractAddress || "",
+            storedAt: onChain.timestamp || archived.pinnedAt || new Date().toISOString()
+          }
+        } : {})
+      });
+
+      if (archivedId) sessionIds.add(archivedId);
+      if (cid) cidsInSessions.add(cid);
     }
+
+    for (const failedEntry of failedEntries) {
+      const cid = String(failedEntry?.cid || "").trim();
+      if (!cid || cidsInSessions.has(cid)) continue;
+
+      const timestamp = failedEntry.timestamp || new Date().toISOString();
+      const onChain = onChainByCid.get(cid);
+      sessions.push({
+        id: `ipfs_${cid}`,
+        summary: {
+          userid: userId,
+          start_time_stamp: timestamp,
+          end_time_stamp: timestamp,
+          keywords: [],
+          emotion: "NEUTRAL",
+          summary: "Session saved, but its IPFS content is currently unavailable from configured gateways."
+        },
+        history: [],
+        status: "completed",
+        ipfs: {
+          cid,
+          uri: `ipfs://${cid}`,
+          gatewayUrl: resolveGatewayUrl(cid),
+          pinnedAt: timestamp
+        },
+        ...(onChain && onChain.txHash ? {
+          onChain: {
+            txHash: onChain.txHash,
+            chainId: Number(onChain.chainId) || 0,
+            contractAddress: onChain.contractAddress || "",
+            storedAt: onChain.timestamp || timestamp
+          }
+        } : {})
+      });
+
+      cidsInSessions.add(cid);
+    }
+
+    sessions.sort((a, b) => {
+      const aTime = new Date(a?.summary?.start_time_stamp || a?.ipfs?.pinnedAt || 0).getTime();
+      const bTime = new Date(b?.summary?.start_time_stamp || b?.ipfs?.pinnedAt || 0).getTime();
+      return bTime - aTime;
+    });
 
     res.json({ sessions });
   } catch (error) {
