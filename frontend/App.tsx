@@ -1948,25 +1948,67 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
 };
 
 // --- Main App Entry ---
+const AUTH_SESSION_KEY = 'care_auth_session';
+const LEGACY_USER_KEY = 'care_user';
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
+type PersistedAuthSession = {
+  user: User;
+  expiresAt: number;
+};
+
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(() => {
+  const [authSession, setAuthSession] = useState<PersistedAuthSession | null>(() => {
     try {
-      const saved = localStorage.getItem('care_user');
-      return saved ? JSON.parse(saved) : null;
+      const savedSession = localStorage.getItem(AUTH_SESSION_KEY);
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession) as PersistedAuthSession;
+        if (parsed?.user && typeof parsed.expiresAt === 'number' && parsed.expiresAt > Date.now()) {
+          return parsed;
+        }
+      }
+
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem(LEGACY_USER_KEY);
+      return null;
     } catch {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem(LEGACY_USER_KEY);
       return null;
     }
   });
 
+  const user = authSession?.user ?? null;
+  const sessionExpiresAt = authSession?.expiresAt ?? null;
+
   const handleLogin = (u: User) => {
-    setUser(u);
-    localStorage.setItem('care_user', JSON.stringify(u));
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    setAuthSession({ user: u, expiresAt });
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: u, expiresAt }));
+    localStorage.removeItem(LEGACY_USER_KEY);
   };
 
   const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('care_user');
+    setAuthSession(null);
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    localStorage.removeItem(LEGACY_USER_KEY);
   };
+
+  useEffect(() => {
+    if (!user || !sessionExpiresAt) return;
+
+    const remainingMs = sessionExpiresAt - Date.now();
+    if (remainingMs <= 0) {
+      handleLogout();
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      handleLogout();
+    }, remainingMs);
+
+    return () => window.clearTimeout(timer);
+  }, [user, sessionExpiresAt]);
 
   return (
     <HashRouter>
