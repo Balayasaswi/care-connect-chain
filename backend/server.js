@@ -27,6 +27,7 @@ const IPFS_READ_GATEWAYS = String(process.env.IPFS_READ_GATEWAYS || `${IPFS_GATE
   .map((item) => item.trim().replace(/\/$/, ""))
   .filter(Boolean);
 const CID_REGISTRY_ABI = [
+  "function storeCidForOwner(string ownerId, string cid) external",
   "function storeCid(string cid) external"
 ];
 const BLOCKCHAIN_RPC_URL = String(process.env.BLOCKCHAIN_RPC_URL || "").trim();
@@ -293,7 +294,15 @@ async function storeCidOnChain({ cid, studentId = "", sessionId = "" }) {
     };
   }
 
-  const transaction = await client.contract.storeCid(cid);
+  const normalizedStudentId = String(studentId || "").trim();
+  const ownerId = normalizedStudentId || await client.wallet.getAddress();
+
+  let transaction;
+  if (typeof client.contract.storeCidForOwner === "function") {
+    transaction = await client.contract.storeCidForOwner(ownerId, cid);
+  } else {
+    transaction = await client.contract.storeCid(cid);
+  }
   const receipt = await transaction.wait();
 
   if (!receipt || receipt.status !== 1) {

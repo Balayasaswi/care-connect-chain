@@ -148,7 +148,9 @@ Content-Type: application/json
 }
 ```
 
-This route uses a server-held wallet to call the CID registry contract. The browser does not need MetaMask.
+This route uses a server-held wallet to call the CID registry contract.
+The browser does not need MetaMask.
+The contract stores ownership as your app `userId` plus the `cid`.
 
 ## Setup
 
@@ -182,6 +184,8 @@ IPFS_READ_GATEWAYS=http://127.0.0.1:8080/ipfs,https://gateway.pinata.cloud/ipfs
 # CID_REGISTRY_CONTRACT_ADDRESS=0xyourdeployedcidregistry
 # BLOCKCHAIN_CHAIN_ID=80002
 ```
+
+Security note: never share these secrets with anyone (including chat). Keep them only in `backend/.env` on your server.
 
 3. Start server:
 ```bash
