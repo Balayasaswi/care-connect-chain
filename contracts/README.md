@@ -42,3 +42,15 @@ VITE_CHAIN_ID=137
 Use `137` for Polygon mainnet or `80002` for Polygon Amoy testnet.
 
 Restart the frontend dev server after updating env variables.
+
+## Small local blockchain
+
+For an offline demo chain, the repository also includes a Besu-based local network.
+
+Run this from the repository root:
+
+```powershell
+./start-local-chain.ps1
+```
+
+That script starts the mini chain, deploys `CIDRegistry.sol`, and writes the deployed address into `backend/.env.local` and `frontend/.env.local`.

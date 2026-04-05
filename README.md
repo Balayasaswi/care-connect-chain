@@ -83,6 +83,28 @@ Configure blockchain and service endpoints as needed.
 ./stop-demo-network.ps1
 ```
 
+## Small Local Blockchain
+
+If you want a tiny private chain for testing or demos, use the bundled Besu network:
+
+```powershell
+./start-local-chain.ps1
+```
+
+This will:
+- Start a 4-node local blockchain with chain ID `1337`
+- Deploy `contracts/CIDRegistry.sol`
+- Write the deployed contract address into `backend/.env.local` and `frontend/.env.local`
+- Keep the app talking to the local chain without public-network fees
+
+Stop it with:
+
+```powershell
+./stop-demo-network.ps1
+```
+
+If you want to use Polygon again, remove or rename the `.env.local` files and restore your Polygon RPC and contract settings in `backend/.env`.
+
 ## Exhibition Startup (Same College Wi-Fi)
 
 Use this one command from the repository root:

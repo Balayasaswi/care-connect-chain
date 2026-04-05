@@ -14,16 +14,13 @@ contract CIDRegistry {
     event CidStored(string indexed ownerId, string cid, address indexed submittedBy, uint256 timestamp);
 
     function storeCidForOwner(string calldata ownerId, string calldata cid) external {
-        require(bytes(ownerId).length > 0, "Owner required");
-        require(bytes(cid).length > 0, "CID required");
-        entries.push(CidEntry({ ownerId: ownerId, submittedBy: msg.sender, cid: cid, timestamp: block.timestamp }));
-        emit CidStored(ownerId, cid, msg.sender, block.timestamp);
+        _storeCidForOwner(ownerId, cid);
     }
 
     // Backward-compatible helper for older clients that only provide a CID.
     // Uses sender address string as ownerId.
     function storeCid(string calldata cid) external {
-        storeCidForOwner(_toHexString(msg.sender), cid);
+        _storeCidForOwner(_toHexString(msg.sender), cid);
     }
 
     function getEntryCount() external view returns (uint256) {
@@ -46,5 +43,12 @@ contract CIDRegistry {
             str[3 + i * 2] = bytes1(hexSymbols[uint8(value[i] & 0x0f)]);
         }
         return string(str);
+    }
+
+    function _storeCidForOwner(string memory ownerId, string memory cid) private {
+        require(bytes(ownerId).length > 0, "Owner required");
+        require(bytes(cid).length > 0, "CID required");
+        entries.push(CidEntry({ ownerId: ownerId, submittedBy: msg.sender, cid: cid, timestamp: block.timestamp }));
+        emit CidStored(ownerId, cid, msg.sender, block.timestamp);
     }
 }
