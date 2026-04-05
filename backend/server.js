@@ -37,6 +37,7 @@ const BLOCKCHAIN_RPC_URL = String(process.env.BLOCKCHAIN_RPC_URL || "").trim();
 const BLOCKCHAIN_PRIVATE_KEY = String(process.env.BLOCKCHAIN_PRIVATE_KEY || "").trim();
 const CID_REGISTRY_CONTRACT_ADDRESS = String(process.env.CID_REGISTRY_CONTRACT_ADDRESS || process.env.CID_CONTRACT_ADDRESS || "").trim();
 const BLOCKCHAIN_CHAIN_ID = parsePositiveInt(process.env.BLOCKCHAIN_CHAIN_ID, 0);
+const BLOCKCHAIN_OPTIONAL = String(process.env.BLOCKCHAIN_OPTIONAL || "true").trim().toLowerCase() !== "false";
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -262,6 +263,14 @@ function getBlockchainClient() {
 async function storeCidOnChain({ cid, studentId = "", sessionId = "" }) {
   const client = getBlockchainClient();
   if (!client) {
+    if (BLOCKCHAIN_OPTIONAL) {
+      return {
+        success: true,
+        skipped: true,
+        error: "Blockchain storage is not configured"
+      };
+    }
+
     return {
       success: false,
       error: "Blockchain storage is not configured"
