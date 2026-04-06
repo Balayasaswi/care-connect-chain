@@ -1,7 +1,21 @@
-import { ChatMessage, CounsellorRequest, CounsellorRequestUrgency, CounsellorSchedule, CounsellorStudent, NetworkActorRole, NetworkConnection, NetworkStatus, OnChainRecord, SessionRecord, SessionSummary } from "../types";
-import { SYSTEM_INSTRUCTION } from "../constants";
+import {
+  ChatMessage,
+  CounsellorRequest,
+  CounsellorRequestUrgency,
+  CounsellorSchedule,
+  CounsellorStudent,
+  NetworkActorRole,
+  NetworkConnection,
+  NetworkStatus,
+  OnChainRecord,
+  SessionRecord,
+  SessionSummary,
+} from '../types';
+import { SYSTEM_INSTRUCTION } from '../constants';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (window.location.hostname === "localhost" ? "http://localhost:5000" : window.location.origin);
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 type IpfsPinResponse = {
   cid: string;
@@ -39,15 +53,12 @@ type SessionPinPayload = {
 };
 
 class GeminiService {
-  async getChatResponse(
-    history: ChatMessage[],
-    userInput: string
-  ): Promise<string> {
+  async getChatResponse(history: ChatMessage[], userInput: string): Promise<string> {
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat`, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           history,
@@ -62,26 +73,23 @@ class GeminiService {
       }
 
       const data = await res.json();
-      return data.text || "";
+      return data.text || '';
     } catch (error) {
-      console.error("Frontend → Backend chat error:", error);
+      console.error('Frontend → Backend chat error:', error);
       throw error; // let ChatWindow catch it
     }
   }
 
   // (stub for later – backend endpoint not added yet)
-  async generateSummary(
-    history: ChatMessage[],
-    userId: string
-  ): Promise<SessionSummary> {
+  async generateSummary(history: ChatMessage[], userId: string): Promise<SessionSummary> {
     const res = await fetch(`${API_BASE_URL}/api/summary`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         history,
-        userId
+        userId,
       }),
     });
 
@@ -93,33 +101,31 @@ class GeminiService {
     return res.json();
   }
 
-  async getGuardianReport(
-    summaries: SessionSummary[]
-  ): Promise<string> {
+  async getGuardianReport(summaries: SessionSummary[]): Promise<string> {
     if (!summaries.length) {
-      return "No sessions found.";
+      return 'No sessions found.';
     }
 
     return summaries
       .map((summary) => {
-        const keywords = Array.isArray(summary.keywords) ? summary.keywords.join(", ") : "";
+        const keywords = Array.isArray(summary.keywords) ? summary.keywords.join(', ') : '';
         return [
           `Session Date: ${summary.start_time_stamp}`,
           `Emotion: ${summary.emotion}`,
           `Keywords: ${keywords}`,
-          `Summary: ${summary.summary}`
-        ].join("\n");
+          `Summary: ${summary.summary}`,
+        ].join('\n');
       })
-      .join("\n\n");
+      .join('\n\n');
   }
 
   async pinSessionToIpfs(payload: SessionPinPayload): Promise<IpfsPinResponse> {
     const res = await fetch(`${API_BASE_URL}/api/ipfs/pin-session`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -130,13 +136,15 @@ class GeminiService {
     return res.json();
   }
 
-  async archiveSession(payload: SessionPinPayload & { cid?: string }): Promise<{ success: boolean }> {
+  async archiveSession(
+    payload: SessionPinPayload & { cid?: string },
+  ): Promise<{ success: boolean }> {
     const res = await fetch(`${API_BASE_URL}/api/sessions/archive`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -149,11 +157,11 @@ class GeminiService {
 
   async recordBlockchainTx(payload: BlockchainRecordPayload): Promise<{ success: boolean }> {
     const res = await fetch(`${API_BASE_URL}/api/blockchain/store-cid`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -164,13 +172,15 @@ class GeminiService {
     return res.json();
   }
 
-  async storeSessionCidOnChain(payload: BlockchainRecordPayload): Promise<BlockchainRecordResponse> {
+  async storeSessionCidOnChain(
+    payload: BlockchainRecordPayload,
+  ): Promise<BlockchainRecordResponse> {
     const res = await fetch(`${API_BASE_URL}/api/blockchain/store-cid`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -181,16 +191,19 @@ class GeminiService {
     return res.json();
   }
 
-  async fetchGuardianSummaries(studentId: string, guardianEmail: string): Promise<SessionSummary[]> {
+  async fetchGuardianSummaries(
+    studentId: string,
+    guardianEmail: string,
+  ): Promise<SessionSummary[]> {
     const url = new URL(`${API_BASE_URL}/api/guardian/summaries`);
-    url.searchParams.set("student_id", studentId);
-    url.searchParams.set("guardian_email", guardianEmail);
+    url.searchParams.set('student_id', studentId);
+    url.searchParams.set('guardian_email', guardianEmail);
 
     const res = await fetch(url.toString(), {
-      method: "GET",
+      method: 'GET',
       headers: {
-        "Content-Type": "application/json"
-      }
+        'Content-Type': 'application/json',
+      },
     });
 
     if (!res.ok) {
@@ -204,7 +217,7 @@ class GeminiService {
 
   async fetchCounsellorSummaries(counsellorEmail: string): Promise<SessionSummary[]> {
     const url = new URL(`${API_BASE_URL}/api/counsellor/summaries`);
-    url.searchParams.set("counsellor_email", counsellorEmail);
+    url.searchParams.set('counsellor_email', counsellorEmail);
     const res = await fetch(url.toString());
     if (!res.ok) {
       const errText = await res.text();
@@ -216,7 +229,7 @@ class GeminiService {
 
   async fetchCounsellorStudents(counsellorEmail: string): Promise<CounsellorStudent[]> {
     const url = new URL(`${API_BASE_URL}/api/counsellor/students`);
-    url.searchParams.set("counsellor_email", counsellorEmail);
+    url.searchParams.set('counsellor_email', counsellorEmail);
     const res = await fetch(url.toString());
     if (!res.ok) {
       const errText = await res.text();
@@ -232,13 +245,13 @@ class GeminiService {
     sessionEmotion?: string;
     urgency: CounsellorRequestUrgency;
     reason?: string;
-    requestedByRole: "guardian" | "institution";
+    requestedByRole: 'guardian' | 'institution';
     requestedByEmail: string;
   }): Promise<CounsellorRequest> {
     const res = await fetch(`${API_BASE_URL}/api/counsellor/requests`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         student_id: payload.studentId,
@@ -247,8 +260,8 @@ class GeminiService {
         urgency: payload.urgency,
         reason: payload.reason,
         requested_by_role: payload.requestedByRole,
-        requested_by_email: payload.requestedByEmail
-      })
+        requested_by_email: payload.requestedByEmail,
+      }),
     });
 
     if (!res.ok) {
@@ -262,7 +275,7 @@ class GeminiService {
 
   async fetchCounsellorRequests(counsellorEmail: string): Promise<CounsellorRequest[]> {
     const url = new URL(`${API_BASE_URL}/api/counsellor/requests`);
-    url.searchParams.set("counsellor_email", counsellorEmail);
+    url.searchParams.set('counsellor_email', counsellorEmail);
     const res = await fetch(url.toString());
     if (!res.ok) {
       const errText = await res.text();
@@ -272,13 +285,16 @@ class GeminiService {
     return Array.isArray(data.requests) ? data.requests : [];
   }
 
-  async createCounsellorSessionFromRequest(requestId: string, counsellorEmail: string): Promise<{ request: CounsellorRequest }> {
+  async createCounsellorSessionFromRequest(
+    requestId: string,
+    counsellorEmail: string,
+  ): Promise<{ request: CounsellorRequest }> {
     const res = await fetch(`${API_BASE_URL}/api/counsellor/requests/${requestId}/create-session`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ counsellor_email: counsellorEmail })
+      body: JSON.stringify({ counsellor_email: counsellorEmail }),
     });
 
     if (!res.ok) {
@@ -299,9 +315,9 @@ class GeminiService {
     sourceRequestId?: string;
   }): Promise<CounsellorSchedule> {
     const res = await fetch(`${API_BASE_URL}/api/counsellor/schedules`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         student_id: payload.studentId,
@@ -309,8 +325,8 @@ class GeminiService {
         scheduled_for: payload.scheduledFor,
         urgency: payload.urgency,
         notes: payload.notes,
-        source_request_id: payload.sourceRequestId
-      })
+        source_request_id: payload.sourceRequestId,
+      }),
     });
 
     if (!res.ok) {
@@ -322,11 +338,14 @@ class GeminiService {
     return data.schedule as CounsellorSchedule;
   }
 
-  async fetchCounsellorSchedules(counsellorEmail: string, studentId?: string): Promise<CounsellorSchedule[]> {
+  async fetchCounsellorSchedules(
+    counsellorEmail: string,
+    studentId?: string,
+  ): Promise<CounsellorSchedule[]> {
     const url = new URL(`${API_BASE_URL}/api/counsellor/schedules`);
-    url.searchParams.set("counsellor_email", counsellorEmail);
+    url.searchParams.set('counsellor_email', counsellorEmail);
     if (studentId) {
-      url.searchParams.set("student_id", studentId);
+      url.searchParams.set('student_id', studentId);
     }
 
     const res = await fetch(url.toString());
@@ -341,7 +360,7 @@ class GeminiService {
 
   async fetchStudentNotifications(studentId: string): Promise<CounsellorSchedule[]> {
     const url = new URL(`${API_BASE_URL}/api/student/notifications`);
-    url.searchParams.set("student_id", studentId);
+    url.searchParams.set('student_id', studentId);
 
     const res = await fetch(url.toString());
     if (!res.ok) {
@@ -353,13 +372,16 @@ class GeminiService {
     return Array.isArray(data.notifications) ? data.notifications : [];
   }
 
-  async markStudentNotificationRead(studentId: string, scheduleId: string): Promise<CounsellorSchedule> {
+  async markStudentNotificationRead(
+    studentId: string,
+    scheduleId: string,
+  ): Promise<CounsellorSchedule> {
     const res = await fetch(`${API_BASE_URL}/api/student/notifications/${scheduleId}/read`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ student_id: studentId })
+      body: JSON.stringify({ student_id: studentId }),
     });
 
     if (!res.ok) {
@@ -373,7 +395,7 @@ class GeminiService {
 
   async fetchInstitutionSummaries(collegeCode: string): Promise<SessionSummary[]> {
     const url = new URL(`${API_BASE_URL}/api/institution/summaries`);
-    url.searchParams.set("college_code", collegeCode);
+    url.searchParams.set('college_code', collegeCode);
     const res = await fetch(url.toString());
     if (!res.ok) {
       const errText = await res.text();
@@ -385,7 +407,7 @@ class GeminiService {
 
   async fetchInstitutionStudents(collegeCode: string): Promise<CounsellorStudent[]> {
     const url = new URL(`${API_BASE_URL}/api/institution/students`);
-    url.searchParams.set("college_code", collegeCode);
+    url.searchParams.set('college_code', collegeCode);
     const res = await fetch(url.toString());
     if (!res.ok) {
       const errText = await res.text();
@@ -397,25 +419,29 @@ class GeminiService {
 
   async fetchSessions(
     userId: string,
-    options?: { actorRole?: "student" | "guardian" | "institution" | "counsellor"; guardianEmail?: string; collegeCode?: string }
+    options?: {
+      actorRole?: 'student' | 'guardian' | 'institution' | 'counsellor';
+      guardianEmail?: string;
+      collegeCode?: string;
+    },
   ): Promise<SessionRecord[]> {
     const url = new URL(`${API_BASE_URL}/api/sessions`);
-    url.searchParams.set("user_id", userId);
+    url.searchParams.set('user_id', userId);
     if (options?.actorRole) {
-      url.searchParams.set("actor_role", options.actorRole);
+      url.searchParams.set('actor_role', options.actorRole);
     }
     if (options?.guardianEmail) {
-      url.searchParams.set("guardian_email", options.guardianEmail);
+      url.searchParams.set('guardian_email', options.guardianEmail);
     }
     if (options?.collegeCode) {
-      url.searchParams.set("college_code", options.collegeCode);
+      url.searchParams.set('college_code', options.collegeCode);
     }
 
     const res = await fetch(url.toString(), {
-      method: "GET",
+      method: 'GET',
       headers: {
-        "Content-Type": "application/json"
-      }
+        'Content-Type': 'application/json',
+      },
     });
 
     if (!res.ok) {
@@ -434,16 +460,16 @@ class GeminiService {
     relationType?: string;
   }): Promise<NetworkConnection> {
     const res = await fetch(`${API_BASE_URL}/api/network/connect-request`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         student_id: payload.studentId,
         actor_id: payload.actorId,
         actor_role: payload.actorRole,
-        relation_type: payload.relationType
-      })
+        relation_type: payload.relationType,
+      }),
     });
 
     if (!res.ok) {
@@ -455,17 +481,21 @@ class GeminiService {
     return data.connection as NetworkConnection;
   }
 
-  async updateNetworkConnectionStatus(connectionId: string, studentId: string, status: Exclude<NetworkStatus, "pending">): Promise<NetworkConnection> {
+  async updateNetworkConnectionStatus(
+    connectionId: string,
+    studentId: string,
+    status: Exclude<NetworkStatus, 'pending'>,
+  ): Promise<NetworkConnection> {
     const res = await fetch(`${API_BASE_URL}/api/network/approve`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         connection_id: connectionId,
         student_id: studentId,
-        status
-      })
+        status,
+      }),
     });
 
     if (!res.ok) {
@@ -477,11 +507,14 @@ class GeminiService {
     return data.connection as NetworkConnection;
   }
 
-  async fetchNetworkConnectionsByStudent(studentId: string, statuses: NetworkStatus[] = []): Promise<NetworkConnection[]> {
+  async fetchNetworkConnectionsByStudent(
+    studentId: string,
+    statuses: NetworkStatus[] = [],
+  ): Promise<NetworkConnection[]> {
     const url = new URL(`${API_BASE_URL}/api/network/my-connections`);
-    url.searchParams.set("student_id", studentId);
+    url.searchParams.set('student_id', studentId);
     if (statuses.length) {
-      url.searchParams.set("statuses", statuses.join(","));
+      url.searchParams.set('statuses', statuses.join(','));
     }
 
     const res = await fetch(url.toString());
@@ -494,12 +527,16 @@ class GeminiService {
     return Array.isArray(data.connections) ? data.connections : [];
   }
 
-  async fetchNetworkConnectionsByActor(actorId: string, actorRole: NetworkActorRole, statuses: NetworkStatus[] = []): Promise<NetworkConnection[]> {
+  async fetchNetworkConnectionsByActor(
+    actorId: string,
+    actorRole: NetworkActorRole,
+    statuses: NetworkStatus[] = [],
+  ): Promise<NetworkConnection[]> {
     const url = new URL(`${API_BASE_URL}/api/network/my-connections`);
-    url.searchParams.set("actor_id", actorId);
-    url.searchParams.set("actor_role", actorRole);
+    url.searchParams.set('actor_id', actorId);
+    url.searchParams.set('actor_role', actorRole);
     if (statuses.length) {
-      url.searchParams.set("statuses", statuses.join(","));
+      url.searchParams.set('statuses', statuses.join(','));
     }
 
     const res = await fetch(url.toString());
@@ -514,11 +551,11 @@ class GeminiService {
 
   async disconnectNetworkConnection(connectionId: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}/api/network/disconnect`, {
-      method: "DELETE",
+      method: 'DELETE',
       headers: {
-        "Content-Type": "application/json"
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ connection_id: connectionId })
+      body: JSON.stringify({ connection_id: connectionId }),
     });
 
     if (!res.ok) {

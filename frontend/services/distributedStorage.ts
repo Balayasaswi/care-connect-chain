@@ -30,7 +30,11 @@ type ReplicaIndexEntry = {
 
 const REPLICA_INDEX_KEY = 'care-connect:replica-index:v1';
 const HELIA_BLOCKSTORE_NAME = 'care-connect-helia-blockstore';
-const LOCAL_KUBO_API_BASE = String(import.meta.env.VITE_LOCAL_IPFS_API_BASE || 'http://127.0.0.1:5001/api/v0').trim().replace(/\/$/, '');
+const LOCAL_KUBO_API_BASE = String(
+  import.meta.env.VITE_LOCAL_IPFS_API_BASE || 'http://127.0.0.1:5001/api/v0',
+)
+  .trim()
+  .replace(/\/$/, '');
 
 type HeliaNode = unknown;
 type UnixFsAddApi = {
@@ -91,7 +95,11 @@ async function addToLocalKubo(envelope: unknown): Promise<string | null> {
   if (typeof window === 'undefined') return null;
 
   const formData = new FormData();
-  formData.append('file', new Blob([JSON.stringify(envelope)], { type: 'application/json' }), 'session.json');
+  formData.append(
+    'file',
+    new Blob([JSON.stringify(envelope)], { type: 'application/json' }),
+    'session.json',
+  );
 
   const endpoint = new URL(`${LOCAL_KUBO_API_BASE}/add`);
   endpoint.searchParams.set('pin', 'true');
@@ -99,7 +107,7 @@ async function addToLocalKubo(envelope: unknown): Promise<string | null> {
 
   const response = await fetch(endpoint, {
     method: 'POST',
-    body: formData
+    body: formData,
   });
 
   if (!response.ok) {
@@ -133,7 +141,9 @@ async function getHeliaNode(): Promise<HeliaNode | null> {
   return heliaNodePromise;
 }
 
-export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload): Promise<LocalReplicaInfo> {
+export async function storeSessionReplicaOnDevice(
+  payload: SessionReplicaPayload,
+): Promise<LocalReplicaInfo> {
   const storedAt = new Date().toISOString();
   const storageKey = `care-connect:session:${payload.userId}:${payload.sessionId}`;
 
@@ -141,8 +151,8 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
     ...payload,
     replica: {
       storedAt,
-      source: 'browser'
-    }
+      source: 'browser',
+    },
   };
 
   if (canUseBrowserStorage()) {
@@ -179,7 +189,8 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
         mode = 'helia';
       }
     } catch (heliaError) {
-      const heliaMessage = heliaError instanceof Error ? heliaError.message : 'Unknown local IPFS error';
+      const heliaMessage =
+        heliaError instanceof Error ? heliaError.message : 'Unknown local IPFS error';
       error = error ? `${error}; ${heliaMessage}` : heliaMessage;
       status = 'device-only';
     }
@@ -192,7 +203,7 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
     localCid,
     status,
     mode,
-    storedAt
+    storedAt,
   });
 
   return {
@@ -201,6 +212,6 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
     storedAt,
     status,
     mode,
-    error
+    error,
   };
 }

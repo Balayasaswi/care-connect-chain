@@ -5,6 +5,7 @@ SQLite database with authentication for students and guardians.
 ## Database Schema
 
 ### Users Table (Students)
+
 - `id` - Hexadecimal UUID (auto-generated unique identifier)
 - `username` - Unique username
 - `email` - Unique email address
@@ -12,6 +13,7 @@ SQLite database with authentication for students and guardians.
 - `created_at` - Timestamp
 
 ### Guardians Table (Weak Entity)
+
 - `student_id` - Primary key & Foreign key to users(id)
 - `guardian_name` - Guardian's full name
 - `guardian_email` - Guardian's email (optional)
@@ -24,6 +26,7 @@ SQLite database with authentication for students and guardians.
 ### Authentication
 
 #### Register Student
+
 ```http
 POST /api/auth/register
 Content-Type: application/json
@@ -36,6 +39,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -45,6 +49,7 @@ Content-Type: application/json
 ```
 
 #### Login
+
 ```http
 POST /api/auth/login
 Content-Type: application/json
@@ -56,6 +61,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -69,6 +75,7 @@ Content-Type: application/json
 ```
 
 #### Get User Profile
+
 ```http
 GET /api/user/:userId
 ```
@@ -76,6 +83,7 @@ GET /api/user/:userId
 ### Guardian Management
 
 #### Add/Update Guardian
+
 ```http
 POST /api/guardian/:studentId
 Content-Type: application/json
@@ -89,11 +97,13 @@ Content-Type: application/json
 ```
 
 #### Get Guardian
+
 ```http
 GET /api/guardian/:studentId
 ```
 
 **Response:**
+
 ```json
 {
   "student_id": "a1b2c3d4e5f6...",
@@ -108,6 +118,7 @@ GET /api/guardian/:studentId
 ### Chat (Groq AI)
 
 #### Send Chat Message
+
 ```http
 POST /api/chat
 Content-Type: application/json
@@ -122,6 +133,7 @@ Content-Type: application/json
 ### IPFS
 
 #### Pin JSON to IPFS
+
 ```http
 POST /api/ipfs/pin-json
 Content-Type: application/json
@@ -137,6 +149,7 @@ Content-Type: application/json
 ### Blockchain
 
 #### Store CID On-Chain
+
 ```http
 POST /api/blockchain/store-cid
 Content-Type: application/json
@@ -155,11 +168,13 @@ The contract stores ownership as your app `userId` plus the `cid`.
 ## Setup
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
 2. Create `.env` file (copy from `.env.example`):
+
 ```env
 GROQ_API_KEY=your_groq_api_key_here
 PORT=5000
@@ -188,6 +203,7 @@ IPFS_READ_GATEWAYS=http://127.0.0.1:8080/ipfs,https://gateway.pinata.cloud/ipfs
 Security note: never share these secrets with anyone (including chat). Keep them only in `backend/.env` on your server.
 
 3. Start server:
+
 ```bash
 npm start
 ```
@@ -200,13 +216,17 @@ Run a local IPFS node (Kubo) on your laptop:
 
 1. Install Kubo from the official IPFS distributions.
 2. Initialize the node once:
+
 ```bash
 ipfs init
 ```
+
 3. Start daemon:
+
 ```bash
 ipfs daemon
 ```
+
 4. Keep daemon running while backend is running.
 
 With this setup, your backend pins and reads CIDs through your laptop node (no paid platform required).

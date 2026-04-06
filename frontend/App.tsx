@@ -1,14 +1,38 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest, CounsellorSchedule, LocalReplicaInfo } from './types.ts';
+import {
+  User,
+  SessionRecord,
+  ChatMessage,
+  UserRole,
+  IpfsPinInfo,
+  CounsellorStudent,
+  CounsellorRequest,
+  CounsellorSchedule,
+  LocalReplicaInfo,
+} from './types.ts';
 import { gemini } from './services/geminiService.ts';
 import { storeSessionReplicaOnDevice } from './services/distributedStorage.ts';
 import ChatWindow from './components/ChatWindow.tsx';
 import SessionList from './components/SessionList.tsx';
-import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle, Building2, Stethoscope, Bell } from 'lucide-react';
+import {
+  Shield,
+  Plus,
+  User as UserIcon,
+  LogOut,
+  ChevronLeft,
+  Lock,
+  Users,
+  History,
+  AlertCircle,
+  Building2,
+  Stethoscope,
+  Bell,
+} from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 const readReportedSessionIds = (storageKey: string): Set<string> => {
   try {
@@ -57,7 +81,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
   const [counsellorCollegeCode, setCounsellorCollegeCode] = useState('');
   const [studentCollegeCode, setStudentCollegeCode] = useState('');
   const [institutionCollegeCode, setInstitutionCollegeCode] = useState('');
-  const [registrationSuccess, setRegistrationSuccess] = useState<{ collegeCode: string } | null>(null);
+  const [registrationSuccess, setRegistrationSuccess] = useState<{ collegeCode: string } | null>(
+    null,
+  );
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -65,7 +91,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -107,7 +133,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             username: username.trim(),
             email: sanitizedEmail,
             password,
-            college_code: studentCollegeCode.trim().toUpperCase()
+            college_code: studentCollegeCode.trim().toUpperCase(),
           });
         }
 
@@ -117,14 +143,14 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
 
         const loginResult = await postJson(`${API_BASE_URL}/api/auth/login`, {
           username: sanitizedEmail,
-          password
+          password,
         });
 
         onLogin({
           id: loginResult.user.id,
           email: loginResult.user.email,
           username: loginResult.user.username,
-          role: 'student'
+          role: 'student',
         });
       } else if (role === 'counsellor') {
         if (counsellorPassword.length < 6) throw new Error('Enter a 6+ character password.');
@@ -143,28 +169,28 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             counsellor_password: counsellorPassword,
             crr_number: crrNumber.trim(),
             organization: organization.trim() || undefined,
-            college_code: counsellorCollegeCode.trim().toUpperCase() || undefined
+            college_code: counsellorCollegeCode.trim().toUpperCase() || undefined,
           });
           onLogin({
             id: counsellorEmail.toLowerCase().trim(),
             email: counsellorEmail.toLowerCase().trim(),
             role: 'counsellor',
             crrNumber: crrNumber.trim(),
-            organization: organization.trim() || undefined
+            organization: organization.trim() || undefined,
           });
         } else {
           if (!counsellorLoginId.trim()) throw new Error('Provide counsellor email or CRR ID.');
           const res = await postJson(`${API_BASE_URL}/api/counsellor/login`, {
             login_id: counsellorLoginId.trim(),
             counsellor_password: counsellorPassword,
-            college_code: counsellorCollegeCode.trim().toUpperCase() || undefined
+            college_code: counsellorCollegeCode.trim().toUpperCase() || undefined,
           });
           onLogin({
             id: (res.counsellor?.counsellor_email || counsellorLoginId).toLowerCase().trim(),
             email: (res.counsellor?.counsellor_email || counsellorLoginId).toLowerCase().trim(),
             role: 'counsellor',
             crrNumber: res.counsellor?.crr_number || crrNumber.trim(),
-            organization: res.counsellor?.organization || undefined
+            organization: res.counsellor?.organization || undefined,
           });
         }
       } else if (role === 'institution') {
@@ -183,7 +209,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             institution_email: institutionEmail.toLowerCase().trim(),
             institution_password: institutionPassword,
             institution_name: institutionName.trim() || undefined,
-            access_code: accessCode.trim() || undefined
+            access_code: accessCode.trim() || undefined,
           });
 
           setRegistrationSuccess({ collegeCode: String(res.college_code || '').toUpperCase() });
@@ -193,14 +219,15 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
           if (!institutionCollegeCode.trim()) throw new Error('College Code is required.');
           const res = await postJson(`${API_BASE_URL}/api/institution/login`, {
             college_code: institutionCollegeCode.trim().toUpperCase(),
-            institution_password: institutionPassword
+            institution_password: institutionPassword,
           });
           onLogin({
             id: res.institution?.institution_email || institutionEmail.toLowerCase().trim(),
             email: res.institution?.institution_email || institutionEmail.toLowerCase().trim(),
             role: 'institution',
             institutionName: res.institution?.institution_name || undefined,
-            collegeCode: res.institution?.college_code || institutionCollegeCode.trim().toUpperCase()
+            collegeCode:
+              res.institution?.college_code || institutionCollegeCode.trim().toUpperCase(),
           });
         }
       } else {
@@ -225,7 +252,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             guardian_email: sanitizedGuardianEmail,
             guardian_password: guardianPassword,
             student_email: sanitizedStudentEmail,
-            relationship: relationship.trim()
+            relationship: relationship.trim(),
           });
 
           onLogin({
@@ -233,12 +260,12 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             email: sanitizedGuardianEmail,
             role: 'guardian',
             studentEmail: sanitizedStudentEmail,
-            studentId: registerResult.studentId
+            studentId: registerResult.studentId,
           });
         } else {
           const loginResult = await postJson(`${API_BASE_URL}/api/guardian/login`, {
             guardian_email: sanitizedGuardianEmail,
-            guardian_password: guardianPassword
+            guardian_password: guardianPassword,
           });
 
           onLogin({
@@ -246,7 +273,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             email: sanitizedGuardianEmail,
             role: 'guardian',
             studentEmail: loginResult.studentEmail,
-            studentId: loginResult.studentId
+            studentId: loginResult.studentId,
           });
         }
       }
@@ -270,48 +297,71 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
         </div>
 
         <div className="flex bg-slate-100 p-1 rounded-xl mb-6 gap-1">
-          <button 
-            onClick={() => { setRole('student'); setError(''); setRegistrationSuccess(null); }}
+          <button
+            onClick={() => {
+              setRole('student');
+              setError('');
+              setRegistrationSuccess(null);
+            }}
             className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${role === 'student' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
           >
             Student
           </button>
-          <button 
-            onClick={() => { setRole('guardian'); setError(''); setRegistrationSuccess(null); }}
+          <button
+            onClick={() => {
+              setRole('guardian');
+              setError('');
+              setRegistrationSuccess(null);
+            }}
             className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${role === 'guardian' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
           >
             Parent
           </button>
-          <button 
-            onClick={() => { setRole('counsellor'); setError(''); setRegistrationSuccess(null); }}
+          <button
+            onClick={() => {
+              setRole('counsellor');
+              setError('');
+              setRegistrationSuccess(null);
+            }}
             className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${role === 'counsellor' ? 'bg-white shadow-sm text-teal-600' : 'text-slate-500'}`}
           >
             Counsellor
           </button>
-          <button 
-            onClick={() => { setRole('institution'); setError(''); setRegistrationSuccess(null); }}
+          <button
+            onClick={() => {
+              setRole('institution');
+              setError('');
+              setRegistrationSuccess(null);
+            }}
             className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${role === 'institution' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500'}`}
           >
             Institution
           </button>
         </div>
 
-          <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
-            <button
-              type="button"
-              onClick={() => { setMode('login'); setError(''); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${mode === 'login' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMode('register'); setError(''); setRegistrationSuccess(null); }}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${mode === 'register' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
-            >
-              Register
-            </button>
-          </div>
+        <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('login');
+              setError('');
+            }}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${mode === 'login' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
+          >
+            Login
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('register');
+              setError('');
+              setRegistrationSuccess(null);
+            }}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${mode === 'register' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}
+          >
+            Register
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {role === 'counsellor' && (
@@ -319,58 +369,113 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               {mode === 'register' ? (
                 <>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">CRR Number</label>
-                    <input type="text" value={crrNumber} onChange={(e) => setCrrNumber(e.target.value)}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                      CRR Number
+                    </label>
+                    <input
+                      type="text"
+                      value={crrNumber}
+                      onChange={(e) => setCrrNumber(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                      placeholder="CRR123456" required />
+                      placeholder="CRR123456"
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Code</label>
-                    <input type="text" value={counsellorCollegeCode} onChange={(e) => setCounsellorCollegeCode(e.target.value.toUpperCase())}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                      College Code
+                    </label>
+                    <input
+                      type="text"
+                      value={counsellorCollegeCode}
+                      onChange={(e) => setCounsellorCollegeCode(e.target.value.toUpperCase())}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                      placeholder="CC-ABC123" required />
+                      placeholder="CC-ABC123"
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Organization (optional)</label>
-                    <input type="text" value={organization} onChange={(e) => setOrganization(e.target.value)}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                      Organization (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={organization}
+                      onChange={(e) => setOrganization(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                      placeholder="City Wellness Clinic" />
+                      placeholder="City Wellness Clinic"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Official Email</label>
-                    <input type="email" value={counsellorEmail} onChange={(e) => setCounsellorEmail(e.target.value)}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                      Official Email
+                    </label>
+                    <input
+                      type="email"
+                      value={counsellorEmail}
+                      onChange={(e) => setCounsellorEmail(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                      placeholder="name@officialclinic.org" required />
+                      placeholder="name@officialclinic.org"
+                      required
+                    />
                   </div>
                 </>
               ) : (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Email or CRR Number</label>
-                  <input type="text" value={counsellorLoginId} onChange={(e) => setCounsellorLoginId(e.target.value)}
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    Email or CRR Number
+                  </label>
+                  <input
+                    type="text"
+                    value={counsellorLoginId}
+                    onChange={(e) => setCounsellorLoginId(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                    placeholder="name@officialclinic.org or CRR123456" required />
+                    placeholder="name@officialclinic.org or CRR123456"
+                    required
+                  />
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Password</label>
-                <input type="password" value={counsellorPassword} onChange={(e) => setCounsellorPassword(e.target.value)}
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={counsellorPassword}
+                  onChange={(e) => setCounsellorPassword(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                  placeholder="••••••••" required />
+                  placeholder="••••••••"
+                  required
+                />
               </div>
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Confirm Password</label>
-                  <input type="password" value={counsellorConfirmPassword} onChange={(e) => setCounsellorConfirmPassword(e.target.value)}
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    value={counsellorConfirmPassword}
+                    onChange={(e) => setCounsellorConfirmPassword(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                    placeholder="••••••••" required />
+                    placeholder="••••••••"
+                    required
+                  />
                 </div>
               )}
               {mode !== 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Code</label>
-                  <input type="text" value={counsellorCollegeCode} onChange={(e) => setCounsellorCollegeCode(e.target.value.toUpperCase())}
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    College Code
+                  </label>
+                  <input
+                    type="text"
+                    value={counsellorCollegeCode}
+                    onChange={(e) => setCounsellorCollegeCode(e.target.value.toUpperCase())}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                    placeholder="CC-ABC123" required />
+                    placeholder="CC-ABC123"
+                    required
+                  />
                 </div>
               )}
             </>
@@ -381,44 +486,85 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               {mode === 'register' ? (
                 <>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Institution Name (optional)</label>
-                    <input type="text" value={institutionName} onChange={(e) => setInstitutionName(e.target.value)}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                      Institution Name (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={institutionName}
+                      onChange={(e) => setInstitutionName(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                      placeholder="State University" />
+                      placeholder="State University"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Verification Code</label>
-                    <input type="text" value={accessCode} onChange={(e) => setAccessCode(e.target.value)}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                      College Verification Code
+                    </label>
+                    <input
+                      type="text"
+                      value={accessCode}
+                      onChange={(e) => setAccessCode(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                      placeholder="Enter institution verification code" required />
+                      placeholder="Enter institution verification code"
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Institution Official Email</label>
-                    <input type="email" value={institutionEmail} onChange={(e) => setInstitutionEmail(e.target.value)}
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                      Institution Official Email
+                    </label>
+                    <input
+                      type="email"
+                      value={institutionEmail}
+                      onChange={(e) => setInstitutionEmail(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                      placeholder="admin@university.edu" required />
+                      placeholder="admin@university.edu"
+                      required
+                    />
                   </div>
                 </>
               ) : (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Code</label>
-                  <input type="text" value={institutionCollegeCode} onChange={(e) => setInstitutionCollegeCode(e.target.value.toUpperCase())}
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    College Code
+                  </label>
+                  <input
+                    type="text"
+                    value={institutionCollegeCode}
+                    onChange={(e) => setInstitutionCollegeCode(e.target.value.toUpperCase())}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                    placeholder="CC-ABC123" required />
+                    placeholder="CC-ABC123"
+                    required
+                  />
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Password</label>
-                <input type="password" value={institutionPassword} onChange={(e) => setInstitutionPassword(e.target.value)}
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={institutionPassword}
+                  onChange={(e) => setInstitutionPassword(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                  placeholder="••••••••" required />
+                  placeholder="••••••••"
+                  required
+                />
               </div>
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Confirm Password</label>
-                  <input type="password" value={institutionConfirmPassword} onChange={(e) => setInstitutionConfirmPassword(e.target.value)}
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    value={institutionConfirmPassword}
+                    onChange={(e) => setInstitutionConfirmPassword(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                    placeholder="••••••••" required />
+                    placeholder="••••••••"
+                    required
+                  />
                 </div>
               )}
             </>
@@ -428,7 +574,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             <>
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Student Email to Monitor</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    Student Email to Monitor
+                  </label>
                   <input
                     type="email"
                     value={studentEmail}
@@ -441,7 +589,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               )}
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Relationship</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    Relationship
+                  </label>
                   <input
                     type="text"
                     value={relationship}
@@ -453,7 +603,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Guardian Email</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                  Guardian Email
+                </label>
                 <input
                   type="email"
                   value={guardianEmail}
@@ -464,7 +616,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Guardian Password</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                  Guardian Password
+                </label>
                 <input
                   type="password"
                   value={guardianPassword}
@@ -476,7 +630,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               </div>
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Confirm Password</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    Confirm Password
+                  </label>
                   <input
                     type="password"
                     value={guardianConfirmPassword}
@@ -494,7 +650,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             <>
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Username</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    Username
+                  </label>
                   <input
                     type="text"
                     value={username}
@@ -507,7 +665,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               )}
               {mode === 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College ID</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                    College ID
+                  </label>
                   <input
                     type="text"
                     value={studentCollegeCode}
@@ -523,7 +683,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
 
           {role === 'student' && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Your Email</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                Your Email
+              </label>
               <input
                 type="email"
                 value={email}
@@ -537,7 +699,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
 
           {role === 'student' && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Password</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                Password
+              </label>
               <input
                 type="password"
                 value={password}
@@ -551,7 +715,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
 
           {role === 'student' && mode === 'register' && (
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Confirm Password</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">
+                Confirm Password
+              </label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -565,7 +731,9 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
 
           {registrationSuccess && role === 'institution' && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 px-4 py-3 text-xs text-center">
-              Registration successful. Your College Code is <span className="font-bold">{registrationSuccess.collegeCode}</span>. Save this code for institution login.
+              Registration successful. Your College Code is{' '}
+              <span className="font-bold">{registrationSuccess.collegeCode}</span>. Save this code
+              for institution login.
             </div>
           )}
           {error && <p className="text-rose-500 text-xs text-center">{error}</p>}
@@ -612,8 +780,12 @@ const SessionSummaryRows: React.FC<{
         return (
           <div key={session.id} className="px-4 py-4 flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate">{session.summary?.summary || 'Session summary unavailable.'}</p>
-              <p className="text-xs text-slate-500 mt-1">{formatDate(session)} | {emotion}</p>
+              <p className="text-sm font-semibold text-slate-800 truncate">
+                {session.summary?.summary || 'Session summary unavailable.'}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {formatDate(session)} | {emotion}
+              </p>
             </div>
             <div className="shrink-0">
               {canReport && (
@@ -625,11 +797,15 @@ const SessionSummaryRows: React.FC<{
                     reportedSessionIds.has(session.id)
                       ? 'bg-green-600 hover:bg-green-600 cursor-not-allowed pointer-events-none opacity-100'
                       : reportingSessionId === session.id
-                      ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
-                      : 'bg-amber-600 hover:bg-amber-700'
+                        ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
+                        : 'bg-amber-600 hover:bg-amber-700'
                   }`}
                 >
-                  {reportedSessionIds.has(session.id) ? 'Reported' : reportingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
+                  {reportedSessionIds.has(session.id)
+                    ? 'Reported'
+                    : reportingSessionId === session.id
+                      ? 'Reporting...'
+                      : 'Report to Counsellor'}
                 </button>
               )}
             </div>
@@ -675,7 +851,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 
         const fetchedSessions = await gemini.fetchSessions(studentId, {
           actorRole: 'guardian',
-          guardianEmail: user.email
+          guardianEmail: user.email,
         });
 
         const normalizedSessions = Array.isArray(fetchedSessions) ? fetchedSessions : [];
@@ -696,7 +872,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         }
         setStatus('ready');
       } catch (err) {
-        console.error("Guardian fetch error:", err);
+        console.error('Guardian fetch error:', err);
         setStatus('no_sessions');
       } finally {
         setLoading(false);
@@ -728,7 +904,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
     if (requestingSessionId === session.id || reportedSessionIds.has(session.id)) return;
 
     setRequestingSessionId(session.id);
-    setReportedSessionIds(prev => new Set([...prev, session.id]));
+    setReportedSessionIds((prev) => new Set([...prev, session.id]));
     setRequestNotice('');
 
     try {
@@ -740,12 +916,12 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         urgency,
         reason: `Guardian escalated ${session.summary.emotion} behaviour from session summary.`,
         requestedByRole: 'guardian',
-        requestedByEmail: user.email
+        requestedByEmail: user.email,
       });
       setRequestNotice('Request sent to counsellor successfully.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
-      setReportedSessionIds(prev => {
+      setReportedSessionIds((prev) => {
         const next = new Set(prev);
         next.delete(session.id);
         return next;
@@ -825,80 +1001,100 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
             <p className="text-sm text-slate-500">No guardian notifications available right now.</p>
           </div>
         ) : (
-        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-6">
-          <div className="border-b border-slate-100 pb-6">
-            <h2 className="text-2xl font-serif text-slate-800">Student Progress Report</h2>
-            <div className="flex gap-4 mt-2">
-              <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold uppercase tracking-tight">STUDENT: {user.studentEmail}</span>
-              <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-widest">PRIVATE DATA PROTECTED</span>
+          <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-6">
+            <div className="border-b border-slate-100 pb-6">
+              <h2 className="text-2xl font-serif text-slate-800">Student Progress Report</h2>
+              <div className="flex gap-4 mt-2">
+                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                  STUDENT: {user.studentEmail}
+                </span>
+                <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-widest">
+                  PRIVATE DATA PROTECTED
+                </span>
+              </div>
             </div>
-          </div>
 
-          {loading ? (
-            <div className="py-20 text-center text-slate-400">Analyzing records...</div>
-          ) : status === 'not_found' ? (
-            <div className="py-12 text-center space-y-4">
-              <AlertCircle className="mx-auto text-rose-300" size={48} />
-              <p className="text-slate-600 font-medium">Student Not Registered</p>
-            </div>
-          ) : status === 'no_sessions' ? (
-            <div className="py-12 text-center space-y-4">
-              <History className="mx-auto text-slate-300" size={48} />
-              <p className="text-slate-600 font-medium">No Active Sessions</p>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-slate-50 overflow-hidden">
-              {sessions.map((session) => {
-                const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
-                const canReport = emotion === 'BAD' || emotion === 'CRITICAL';
-                const keywords = Array.isArray(session.summary?.keywords) ? session.summary.keywords.join(', ') : '';
-                const rawDate = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
-                const parsedDate = new Date(rawDate);
-                const displayDate = Number.isNaN(parsedDate.getTime()) ? 'Date unavailable' : parsedDate.toISOString();
+            {loading ? (
+              <div className="py-20 text-center text-slate-400">Analyzing records...</div>
+            ) : status === 'not_found' ? (
+              <div className="py-12 text-center space-y-4">
+                <AlertCircle className="mx-auto text-rose-300" size={48} />
+                <p className="text-slate-600 font-medium">Student Not Registered</p>
+              </div>
+            ) : status === 'no_sessions' ? (
+              <div className="py-12 text-center space-y-4">
+                <History className="mx-auto text-slate-300" size={48} />
+                <p className="text-slate-600 font-medium">No Active Sessions</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-slate-50 overflow-hidden">
+                {sessions.map((session) => {
+                  const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
+                  const canReport = emotion === 'BAD' || emotion === 'CRITICAL';
+                  const keywords = Array.isArray(session.summary?.keywords)
+                    ? session.summary.keywords.join(', ')
+                    : '';
+                  const rawDate = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
+                  const parsedDate = new Date(rawDate);
+                  const displayDate = Number.isNaN(parsedDate.getTime())
+                    ? 'Date unavailable'
+                    : parsedDate.toISOString();
 
-                return (
-                  <div key={session.id} className="px-6 py-4 bg-slate-50 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm text-slate-700">Session Date: {displayDate}</p>
-                      <p className="text-sm text-slate-700">Emotion: {emotion}</p>
-                      <p className="text-sm text-slate-700">Keywords: {keywords}</p>
-                      <p className="text-sm text-slate-700">Summary: {session.summary?.summary || 'Session summary unavailable.'}</p>
-                    </div>
-                    <div className="shrink-0">
-                      {canReport && (
-                        <button
-                          type="button"
-                          onClick={() => handleRequestCounsellor(session)}
-                          disabled={requestingSessionId === session.id || reportedSessionIds.has(session.id)}
-                          className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg text-white transition-all ${
-                            reportedSessionIds.has(session.id)
-                              ? 'bg-green-600 hover:bg-green-600 cursor-not-allowed pointer-events-none opacity-100'
+                  return (
+                    <div
+                      key={session.id}
+                      className="px-6 py-4 bg-slate-50 flex items-start justify-between gap-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-700">Session Date: {displayDate}</p>
+                        <p className="text-sm text-slate-700">Emotion: {emotion}</p>
+                        <p className="text-sm text-slate-700">Keywords: {keywords}</p>
+                        <p className="text-sm text-slate-700">
+                          Summary: {session.summary?.summary || 'Session summary unavailable.'}
+                        </p>
+                      </div>
+                      <div className="shrink-0">
+                        {canReport && (
+                          <button
+                            type="button"
+                            onClick={() => handleRequestCounsellor(session)}
+                            disabled={
+                              requestingSessionId === session.id ||
+                              reportedSessionIds.has(session.id)
+                            }
+                            className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg text-white transition-all ${
+                              reportedSessionIds.has(session.id)
+                                ? 'bg-green-600 hover:bg-green-600 cursor-not-allowed pointer-events-none opacity-100'
+                                : requestingSessionId === session.id
+                                  ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
+                                  : 'bg-amber-600 hover:bg-amber-700'
+                            }`}
+                          >
+                            {reportedSessionIds.has(session.id)
+                              ? 'Reported'
                               : requestingSessionId === session.id
-                              ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
-                              : 'bg-amber-600 hover:bg-amber-700'
-                          }`}
-                        >
-                          {reportedSessionIds.has(session.id) ? 'Reported' : requestingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
-                        </button>
-                      )}
+                                ? 'Reporting...'
+                                : 'Report to Counsellor'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
 
-          {requestNotice && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
-              {requestNotice}
-            </div>
-          )}
+            {requestNotice && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+                {requestNotice}
+              </div>
+            )}
 
-          <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
-            <Lock size={12} />
-            Secure Guardian Terminal
+            <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+              <Lock size={12} />
+              Secure Guardian Terminal
+            </div>
           </div>
-        </div>
         )}
       </main>
     </div>
@@ -906,7 +1102,10 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 };
 
 // --- Counsellor Dashboard ---
-const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
+const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
+  user,
+  onLogout,
+}) => {
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
   const [view, setView] = useState<'students' | 'student_detail' | 'notifications'>('students');
@@ -946,13 +1145,23 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
             {
               id: request.student_id,
               username: matchedStudent?.username || request.student_username || '',
-              email: matchedStudent?.email || request.student_email || request.student_id
-            }
+              email: matchedStudent?.email || request.student_email || request.student_id,
+            },
           ] as const;
-        })
-    ).values()
+        }),
+    ).values(),
   );
-  const pendingNotificationsCount = requests.filter((request) => request.status !== 'session_created').length;
+  const pendingUrgencyByStudent = new Map<string, 'critical' | 'bad'>();
+  for (const request of requests) {
+    if (request.status === 'session_created') continue;
+    const existing = pendingUrgencyByStudent.get(request.student_id);
+    if (!existing || request.urgency === 'critical') {
+      pendingUrgencyByStudent.set(request.student_id, request.urgency);
+    }
+  }
+  const pendingNotificationsCount = requests.filter(
+    (request) => request.status !== 'session_created',
+  ).length;
 
   const toInputDateTime = (date: Date) => {
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -996,10 +1205,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
 
   const selectStudent = async (student: CounsellorStudent) => {
     setView('student_detail');
-    await Promise.all([
-      loadStudentSessions(student),
-      loadStudentSchedules(student.id)
-    ]);
+    await Promise.all([loadStudentSessions(student), loadStudentSchedules(student.id)]);
     setScheduleUrgency('bad');
     setScheduleNotes('');
     setScheduleAt(toInputDateTime(new Date(Date.now() + 60 * 60 * 1000)));
@@ -1010,7 +1216,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
       try {
         const [linkedStudents, pendingRequests] = await Promise.all([
           gemini.fetchCounsellorStudents(user.email),
-          gemini.fetchCounsellorRequests(user.email)
+          gemini.fetchCounsellorRequests(user.email),
         ]);
 
         setStudents(linkedStudents);
@@ -1063,18 +1269,22 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
         scheduledFor: scheduledForIso,
         urgency: request.urgency,
         notes: request.reason || `Scheduled from ${request.requested_by_role} escalation request.`,
-        sourceRequestId: request.id
+        sourceRequestId: request.id,
       });
 
-      setRequests((prev) => prev.map((item) => (
-        item.id === request.id ? { ...item, status: 'session_created' } : item
-      )));
+      setRequests((prev) =>
+        prev.map((item) =>
+          item.id === request.id ? { ...item, status: 'session_created' } : item,
+        ),
+      );
 
       if (selectedStudent?.id === request.student_id) {
         setSchedules((prev) => [scheduled, ...prev]);
       }
 
-      setRequestNotice(`Support session scheduled for ${request.student_username || request.student_email || request.student_id}.`);
+      setRequestNotice(
+        `Support session scheduled for ${request.student_username || request.student_email || request.student_id}.`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create support session.';
       setRequestNotice(message);
@@ -1095,12 +1305,14 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
         counsellorEmail: user.email,
         scheduledFor: new Date(scheduleAt).toISOString(),
         urgency: scheduleUrgency,
-        notes: scheduleNotes
+        notes: scheduleNotes,
       });
 
       setSchedules((prev) => [scheduled, ...prev]);
       setScheduleNotes('');
-      setRequestNotice(`Session scheduled for ${selectedStudent.username || selectedStudent.email}.`);
+      setRequestNotice(
+        `Session scheduled for ${selectedStudent.username || selectedStudent.email}.`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to schedule session.';
       setRequestNotice(message);
@@ -1171,10 +1383,20 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
               <>
                 <h2 className="text-2xl font-serif text-slate-800">Clinical Session Report</h2>
                 <div className="flex flex-wrap gap-3 mt-2">
-                  <span className="text-[10px] bg-teal-50 text-teal-700 px-2 py-1 rounded font-bold uppercase tracking-tight">INSTITUTION STUDENTS ONLY</span>
-                  <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">STUDENTS: {students.length}</span>
-                  {user.organization && <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">{user.organization}</span>}
-                  <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-1 rounded font-bold uppercase tracking-widest">CLINICAL VIEW</span>
+                  <span className="text-[10px] bg-teal-50 text-teal-700 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                    INSTITUTION STUDENTS ONLY
+                  </span>
+                  <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                    STUDENTS: {students.length}
+                  </span>
+                  {user.organization && (
+                    <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                      {user.organization}
+                    </span>
+                  )}
+                  <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-1 rounded font-bold uppercase tracking-widest">
+                    CLINICAL VIEW
+                  </span>
                 </div>
               </>
             ) : view === 'notifications' ? (
@@ -1188,7 +1410,9 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                   Back to Students
                 </button>
                 <h2 className="text-2xl font-serif text-slate-800 mt-3">Notifications</h2>
-                <p className="text-sm text-slate-500 mt-1">Escalation alerts and pending session scheduling requests.</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Escalation alerts and pending session scheduling requests.
+                </p>
               </>
             ) : (
               <>
@@ -1203,7 +1427,9 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                 <h2 className="text-2xl font-serif text-slate-800 mt-3">
                   {selectedStudent?.username || selectedStudent?.email || 'Student'} Care View
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">Schedule support first, then review summary-only sessions.</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Schedule support first, then review summary-only sessions.
+                </p>
               </>
             )}
           </div>
@@ -1236,7 +1462,9 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
 
               {highlyCriticalStudents.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-rose-600">Highly Critical Students</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-rose-600">
+                    Triage Queue: Critical
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {highlyCriticalStudents.map((student) => (
                       <button
@@ -1252,18 +1480,53 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                 </div>
               )}
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                {filteredStudents.map((student) => (
-                  <button
-                    key={student.id}
-                    type="button"
-                    onClick={() => selectStudent(student)}
-                    className={`text-left px-4 py-3 rounded-xl border transition-colors ${selectedStudent?.id === student.id ? 'border-teal-300 bg-teal-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
-                  >
-                    <p className="text-sm font-semibold text-slate-800">{student.username || 'Student'}</p>
-                    <p className="text-xs text-slate-500">{student.email}</p>
-                  </button>
-                ))}
+              <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white">
+                <ol className="divide-y divide-slate-100">
+                  {filteredStudents.map((student, index) => {
+                    const pendingUrgency = pendingUrgencyByStudent.get(student.id);
+                    const isSelected = selectedStudent?.id === student.id;
+
+                    return (
+                      <li key={student.id}>
+                        <button
+                          type="button"
+                          onClick={() => selectStudent(student)}
+                          className={`w-full text-left px-4 py-3 transition-colors ${isSelected ? 'bg-teal-50' : 'bg-white hover:bg-slate-50'}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span
+                                className={`w-7 h-7 shrink-0 rounded-full text-[11px] font-bold flex items-center justify-center ${isSelected ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                              >
+                                {index + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">
+                                  {student.username || 'Student'}
+                                </p>
+                                <p className="text-xs text-slate-500 truncate">{student.email}</p>
+                              </div>
+                            </div>
+                            <div className="shrink-0 flex items-center gap-2">
+                              {pendingUrgency && (
+                                <span
+                                  className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-widest ${pendingUrgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}
+                                >
+                                  {pendingUrgency}
+                                </span>
+                              )}
+                              {isSelected && (
+                                <span className="text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-widest bg-teal-100 text-teal-700">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
               </div>
               {filteredStudents.length === 0 && (
                 <p className="text-sm text-slate-500">No students match your search.</p>
@@ -1275,7 +1538,10 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
             <div className="space-y-6 border-t border-slate-100 pt-6">
               <div className="space-y-4 border border-teal-100 rounded-2xl p-5 bg-teal-50/50">
                 <h4 className="font-serif text-lg text-slate-900">Schedule Support Session</h4>
-                <form onSubmit={handleScheduleForSelectedStudent} className="grid gap-3 sm:grid-cols-2">
+                <form
+                  onSubmit={handleScheduleForSelectedStudent}
+                  className="grid gap-3 sm:grid-cols-2"
+                >
                   <input
                     type="datetime-local"
                     value={scheduleAt}
@@ -1285,7 +1551,9 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                   />
                   <select
                     value={scheduleUrgency}
-                    onChange={(event) => setScheduleUrgency(event.target.value as 'critical' | 'bad')}
+                    onChange={(event) =>
+                      setScheduleUrgency(event.target.value as 'critical' | 'bad')
+                    }
                     className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
                   >
                     <option value="bad">Bad</option>
@@ -1307,7 +1575,9 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                 </form>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Scheduled Sessions</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                    Scheduled Sessions
+                  </p>
                   {schedulesLoading ? (
                     <p className="text-sm text-slate-500">Loading schedules...</p>
                   ) : schedules.length === 0 ? (
@@ -1315,11 +1585,17 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                   ) : (
                     <div className="space-y-2">
                       {schedules.map((schedule) => (
-                        <div key={schedule.id} className="rounded-xl bg-white border border-slate-100 px-3 py-2">
+                        <div
+                          key={schedule.id}
+                          className="rounded-xl bg-white border border-slate-100 px-3 py-2"
+                        >
                           <p className="text-sm font-semibold text-slate-700">
-                            {new Date(schedule.scheduled_for).toLocaleString()} | {schedule.urgency.toUpperCase()}
+                            {new Date(schedule.scheduled_for).toLocaleString()} |{' '}
+                            {schedule.urgency.toUpperCase()}
                           </p>
-                          {schedule.notes && <p className="text-xs text-slate-500 mt-1">{schedule.notes}</p>}
+                          {schedule.notes && (
+                            <p className="text-xs text-slate-500 mt-1">{schedule.notes}</p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1330,25 +1606,39 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
               <div className="space-y-3">
                 <h4 className="font-serif text-lg text-slate-900">Session Summaries</h4>
                 {sessionsLoading ? (
-                  <div className="py-10 text-center text-slate-400">Loading student sessions...</div>
+                  <div className="py-10 text-center text-slate-400">
+                    Loading student sessions...
+                  </div>
                 ) : selectedStudentSessions.length === 0 ? (
-                  <div className="py-10 text-center text-slate-400">No session summaries for this student yet.</div>
+                  <div className="py-10 text-center text-slate-400">
+                    No session summaries for this student yet.
+                  </div>
                 ) : (
                   <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 bg-white overflow-hidden">
                     {selectedStudentSessions.map((session) => {
                       const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
-                      const keywords = Array.isArray(session.summary?.keywords) ? session.summary.keywords.join(', ') : '';
-                      const rawDate = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
+                      const keywords = Array.isArray(session.summary?.keywords)
+                        ? session.summary.keywords.join(', ')
+                        : '';
+                      const rawDate =
+                        session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
                       const parsedDate = new Date(rawDate);
-                      const displayDate = Number.isNaN(parsedDate.getTime()) ? 'Date unavailable' : parsedDate.toISOString();
+                      const displayDate = Number.isNaN(parsedDate.getTime())
+                        ? 'Date unavailable'
+                        : parsedDate.toISOString();
 
                       return (
-                        <div key={session.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                        <div
+                          key={session.id}
+                          className="px-6 py-4 flex items-start justify-between gap-4"
+                        >
                           <div className="min-w-0">
                             <p className="text-sm text-slate-700">Session Date: {displayDate}</p>
                             <p className="text-sm text-slate-700">Emotion: {emotion}</p>
                             <p className="text-sm text-slate-700">Keywords: {keywords}</p>
-                            <p className="text-sm text-slate-700">Summary: {session.summary?.summary || 'Session summary unavailable.'}</p>
+                            <p className="text-sm text-slate-700">
+                              Summary: {session.summary?.summary || 'Session summary unavailable.'}
+                            </p>
                           </div>
                         </div>
                       );
@@ -1368,19 +1658,28 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
                   {requests
                     .filter((request) => request.status !== 'session_created')
                     .map((request) => (
-                      <div key={`notif_${request.id}`} className="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-2">
+                      <div
+                        key={`notif_${request.id}`}
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-2"
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-800">
-                            {request.student_username || request.student_email || request.student_id}
+                            {request.student_username ||
+                              request.student_email ||
+                              request.student_id}
                           </p>
-                          <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest ${request.urgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                          <span
+                            className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest ${request.urgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}
+                          >
                             {request.urgency}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500">
                           From {request.requested_by_role}: {request.requested_by_email}
                         </p>
-                        {request.reason && <p className="text-sm text-slate-700">{request.reason}</p>}
+                        {request.reason && (
+                          <p className="text-sm text-slate-700">{request.reason}</p>
+                        )}
                       </div>
                     ))}
                 </div>
@@ -1389,47 +1688,61 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
           )}
 
           {view !== 'notifications' && (
-          <div className="space-y-4 border-t border-slate-100 pt-6">
-            <h3 className="text-lg font-serif text-slate-900">Escalation Requests</h3>
-            {requestNotice && (
-              <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-xs text-teal-700">
-                {requestNotice}
-              </div>
-            )}
-            {requests.length === 0 ? (
-              <p className="text-sm text-slate-500">No requests received yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {requests.map((request) => (
-                  <div key={request.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-800">
-                        {request.student_username || request.student_email || request.student_id}
+            <div className="space-y-4 border-t border-slate-100 pt-6">
+              <h3 className="text-lg font-serif text-slate-900">Escalation Requests</h3>
+              {requestNotice && (
+                <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-xs text-teal-700">
+                  {requestNotice}
+                </div>
+              )}
+              {requests.length === 0 ? (
+                <p className="text-sm text-slate-500">No requests received yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {requests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-3 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {request.student_username || request.student_email || request.student_id}
+                        </p>
+                        <span
+                          className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest ${request.urgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}
+                        >
+                          {request.urgency}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        From {request.requested_by_role}: {request.requested_by_email}
                       </p>
-                      <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest ${request.urgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {request.urgency}
-                      </span>
+                      {request.reason && <p className="text-sm text-slate-700">{request.reason}</p>}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          Status: {request.status}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCreateSessionFromRequest(request)}
+                          disabled={
+                            request.status === 'session_created' ||
+                            processingRequestId === request.id
+                          }
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 disabled:opacity-60"
+                        >
+                          {processingRequestId === request.id
+                            ? 'Scheduling...'
+                            : request.status === 'session_created'
+                              ? 'Session Created'
+                              : 'Schedule by Urgency'}
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      From {request.requested_by_role}: {request.requested_by_email}
-                    </p>
-                    {request.reason && <p className="text-sm text-slate-700">{request.reason}</p>}
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Status: {request.status}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCreateSessionFromRequest(request)}
-                        disabled={request.status === 'session_created' || processingRequestId === request.id}
-                        className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 disabled:opacity-60"
-                      >
-                        {processingRequestId === request.id ? 'Scheduling...' : request.status === 'session_created' ? 'Session Created' : 'Schedule by Urgency'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           <div className="pt-6 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
@@ -1443,7 +1756,10 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ u
 };
 
 // --- Institution Dashboard ---
-const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
+const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
+  user,
+  onLogout,
+}) => {
   const [selectedStudentReport, setSelectedStudentReport] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'ready'>('ready');
@@ -1507,7 +1823,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     try {
       const sessions = await gemini.fetchSessions(student.id, {
         actorRole: 'institution',
-        collegeCode: user.collegeCode
+        collegeCode: user.collegeCode,
       });
       const normalized = Array.isArray(sessions) ? sessions : [];
       setSelectedStudentSessions(normalized);
@@ -1535,7 +1851,11 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     const fetchSummaries = async () => {
       try {
         const collegeCode = user.collegeCode || '';
-        if (!collegeCode) { setStatus('not_found'); setLoading(false); return; }
+        if (!collegeCode) {
+          setStatus('not_found');
+          setLoading(false);
+          return;
+        }
         const linkedStudents = await gemini.fetchInstitutionStudents(collegeCode);
 
         setStudents(linkedStudents);
@@ -1560,10 +1880,14 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
 
   const handleRequestCounsellor = async () => {
     if (!selectedStudent || !reportableSession) return;
-    if (requestingSessionId === reportableSession.id || reportedSessionIds.has(reportableSession.id)) return;
+    if (
+      requestingSessionId === reportableSession.id ||
+      reportedSessionIds.has(reportableSession.id)
+    )
+      return;
 
     setRequestingSessionId(reportableSession.id);
-    setReportedSessionIds(prev => new Set([...prev, reportableSession.id]));
+    setReportedSessionIds((prev) => new Set([...prev, reportableSession.id]));
     setRequestNotice('');
     try {
       const urgency = reportableSession.summary.emotion === 'CRITICAL' ? 'critical' : 'bad';
@@ -1574,12 +1898,12 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
         urgency,
         reason: `Institution escalated ${reportableSession.summary.emotion} behaviour from session summary.`,
         requestedByRole: 'institution',
-        requestedByEmail: user.email
+        requestedByEmail: user.email,
       });
       setRequestNotice('Request sent to counsellor successfully.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
-      setReportedSessionIds(prev => {
+      setReportedSessionIds((prev) => {
         const next = new Set(prev);
         next.delete(reportableSession.id);
         return next;
@@ -1645,10 +1969,22 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
               <>
                 <h2 className="text-2xl font-serif text-slate-800">Student Wellbeing Overview</h2>
                 <div className="flex flex-wrap gap-3 mt-2">
-                  <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">ALL STUDENTS</span>
-                  {user.institutionName && <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">{user.institutionName}</span>}
-                  {user.collegeCode && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">COLLEGE CODE: {user.collegeCode}</span>}
-                  <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-1 rounded font-bold uppercase tracking-widest">ADMIN VIEW</span>
+                  <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                    ALL STUDENTS
+                  </span>
+                  {user.institutionName && (
+                    <span className="text-[10px] bg-slate-50 text-slate-600 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                      {user.institutionName}
+                    </span>
+                  )}
+                  {user.collegeCode && (
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-tight">
+                      COLLEGE CODE: {user.collegeCode}
+                    </span>
+                  )}
+                  <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-1 rounded font-bold uppercase tracking-widest">
+                    ADMIN VIEW
+                  </span>
                 </div>
               </>
             ) : view === 'notifications' ? (
@@ -1662,7 +1998,9 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                   Back to Students
                 </button>
                 <h2 className="text-2xl font-serif text-slate-800 mt-3">Notifications</h2>
-                <p className="text-sm text-slate-500 mt-1">Institution alerts and escalations will appear here.</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Institution alerts and escalations will appear here.
+                </p>
               </>
             ) : (
               <>
@@ -1677,7 +2015,9 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                 <h2 className="text-2xl font-serif text-slate-800 mt-3">
                   {selectedStudent?.username || selectedStudent?.email || 'Student'} Summaries
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">Institution view: summary-only records</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Institution view: summary-only records
+                </p>
               </>
             )}
           </div>
@@ -1708,7 +2048,9 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                 />
               </div>
               <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Recommended Students</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Recommended Students
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {recommendedStudents.map((student) => (
                     <button
@@ -1721,7 +2063,9 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                     </button>
                   ))}
                   {recommendedStudents.length === 0 && (
-                    <span className="text-xs text-slate-500">No recommendations for this search.</span>
+                    <span className="text-xs text-slate-500">
+                      No recommendations for this search.
+                    </span>
                   )}
                 </div>
               </div>
@@ -1733,7 +2077,9 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                     onClick={() => loadStudentSessions(student)}
                     className={`text-left px-4 py-3 rounded-xl border transition-colors ${selectedStudent?.id === student.id ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                   >
-                    <p className="text-sm font-semibold text-slate-800">{student.username || 'Student'}</p>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {student.username || 'Student'}
+                    </p>
                     <p className="text-xs text-slate-500">{student.email}</p>
                   </button>
                 ))}
@@ -1765,27 +2111,41 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                   {selectedStudentSessions.length > 0 && (
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                       <div className="flex items-start justify-between gap-3 mb-3">
-                        <span className="text-xs font-semibold text-slate-600">Session Summary</span>
+                        <span className="text-xs font-semibold text-slate-600">
+                          Session Summary
+                        </span>
                         <button
                           type="button"
                           onClick={handleRequestCounsellor}
-                          disabled={!reportableSession || requestingSessionId !== null || (reportableSession ? reportedSessionIds.has(reportableSession.id) : false)}
+                          disabled={
+                            !reportableSession ||
+                            requestingSessionId !== null ||
+                            (reportableSession
+                              ? reportedSessionIds.has(reportableSession.id)
+                              : false)
+                          }
                           className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg text-white transition-all ${
                             reportableSession && reportedSessionIds.has(reportableSession.id)
                               ? 'bg-green-600 hover:bg-green-600 cursor-not-allowed pointer-events-none opacity-100'
                               : requestingSessionId
-                              ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
-                              : 'bg-amber-600 hover:bg-amber-700'
+                                ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
+                                : 'bg-amber-600 hover:bg-amber-700'
                           }`}
                         >
-                          {reportableSession && reportedSessionIds.has(reportableSession.id) ? 'Reported' : requestingSessionId ? 'Reporting...' : 'Report to Counsellor'}
+                          {reportableSession && reportedSessionIds.has(reportableSession.id)
+                            ? 'Reported'
+                            : requestingSessionId
+                              ? 'Reporting...'
+                              : 'Report to Counsellor'}
                         </button>
                       </div>
                       <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">
                         {selectedStudentReport}
                       </pre>
                       {!reportableSession && (
-                        <p className="text-xs text-slate-500 mt-3">No BAD/CRITICAL summary available for escalation.</p>
+                        <p className="text-xs text-slate-500 mt-3">
+                          No BAD/CRITICAL summary available for escalation.
+                        </p>
                       )}
                       {requestNotice && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 mt-3">
@@ -1801,7 +2161,9 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
 
           {view === 'notifications' && (
             <div className="space-y-4 border-t border-slate-100 pt-6">
-              <p className="text-sm text-slate-500">No institution notifications available right now.</p>
+              <p className="text-sm text-slate-500">
+                No institution notifications available right now.
+              </p>
             </div>
           )}
 
@@ -1844,9 +2206,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
 
       const parsed = JSON.parse(savedDeleted);
       if (Array.isArray(parsed)) {
-        const normalized = parsed
-          .map((item) => String(item || '').trim())
-          .filter(Boolean);
+        const normalized = parsed.map((item) => String(item || '').trim()).filter(Boolean);
         setDeletedSessionIds(normalized);
         return;
       }
@@ -1874,7 +2234,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         if (!isActive) return;
         setSessions(Array.isArray(stored) ? stored : []);
       } catch (e) {
-        console.error("Session load error:", e);
+        console.error('Session load error:', e);
         if (isActive) {
           setSessions([]);
         }
@@ -1933,19 +2293,21 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
     };
   }, [isProfileMenuOpen]);
 
-  const saveSessions = (updated: SessionRecord[] | ((prev: SessionRecord[]) => SessionRecord[])) => {
+  const saveSessions = (
+    updated: SessionRecord[] | ((prev: SessionRecord[]) => SessionRecord[]),
+  ) => {
     setSessions((prev) => (typeof updated === 'function' ? updated(prev) : updated));
   };
 
   const handleDeleteSession = (sessionId: string) => {
-    const confirmed = window.confirm('Are you sure you want to delete this conversation from your list?');
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this conversation from your list?',
+    );
     if (!confirmed) return;
     setDeletedSessionIds((prev) => (prev.includes(sessionId) ? prev : [sessionId, ...prev]));
   };
 
-  const visibleSessions = sessions.filter(
-    (session) => !deletedSessionIds.includes(session.id)
-  );
+  const visibleSessions = sessions.filter((session) => !deletedSessionIds.includes(session.id));
   const unreadNotificationsCount = notifications.filter((item) => !item.student_read_at).length;
 
   const replicaMode = activeSessionReplica?.mode || 'device-only';
@@ -1953,20 +2315,20 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
     if (replicaMode === 'kubo') {
       return {
         label: 'Local Kubo Connected',
-        className: 'bg-emerald-50 border-emerald-100 text-emerald-700'
+        className: 'bg-emerald-50 border-emerald-100 text-emerald-700',
       };
     }
 
     if (replicaMode === 'helia') {
       return {
         label: 'Helia Fallback Active',
-        className: 'bg-amber-50 border-amber-100 text-amber-700'
+        className: 'bg-amber-50 border-amber-100 text-amber-700',
       };
     }
 
     return {
       label: 'Device Only Mode',
-      className: 'bg-slate-100 border-slate-200 text-slate-600'
+      className: 'bg-slate-100 border-slate-200 text-slate-600',
     };
   })();
 
@@ -1974,9 +2336,9 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
     setReadingNotificationId(scheduleId);
     try {
       const updated = await gemini.markStudentNotificationRead(user.id, scheduleId);
-      setNotifications((prev) => prev.map((item) => (
-        item.id === scheduleId ? { ...item, ...updated } : item
-      )));
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === scheduleId ? { ...item, ...updated } : item)),
+      );
     } catch (error) {
       console.error('Mark student notification read error:', error);
     } finally {
@@ -1998,7 +2360,9 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Bell className="text-indigo-600" size={18} />
-          <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-700">Notifications</h3>
+          <h3 className="text-sm font-bold uppercase tracking-widest text-indigo-700">
+            Notifications
+          </h3>
           {unreadNotificationsCount > 0 && (
             <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 font-bold uppercase tracking-widest">
               {unreadNotificationsCount} unread
@@ -2027,7 +2391,10 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
               : scheduledAt.toLocaleString();
 
             return (
-              <div key={item.id} className={`rounded-xl border px-3 py-2 ${item.student_read_at ? 'border-slate-200 bg-slate-50/70' : 'border-indigo-100 bg-indigo-50/60'}`}>
+              <div
+                key={item.id}
+                className={`rounded-xl border px-3 py-2 ${item.student_read_at ? 'border-slate-200 bg-slate-50/70' : 'border-indigo-100 bg-indigo-50/60'}`}
+              >
                 <p className="text-sm font-semibold text-indigo-900">
                   Counsellor session scheduled at {when}
                 </p>
@@ -2072,7 +2439,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       end_time_stamp: history[history.length - 1]?.timestamp || nowIso,
       keywords: [],
       emotion: 'NEUTRAL' as const,
-      summary: summaryPreview
+      summary: summaryPreview,
     };
 
     try {
@@ -2081,37 +2448,49 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         userId: user.id,
         summary,
         history,
-        pinnedAt: nowIso
+        pinnedAt: nowIso,
       });
       setActiveSessionReplica(localReplica);
       if (localReplica.mode === 'kubo') {
-        setReplicaStatusNote('Distributed mode active: this laptop Kubo node stored a local IPFS copy and Pinata stored a remote copy.');
+        setReplicaStatusNote(
+          'Distributed mode active: this laptop Kubo node stored a local IPFS copy and Pinata stored a remote copy.',
+        );
       } else if (localReplica.mode === 'helia') {
-        setReplicaStatusNote('Helia fallback active: browser IPFS stored a local copy and Pinata stored a remote copy.');
+        setReplicaStatusNote(
+          'Helia fallback active: browser IPFS stored a local copy and Pinata stored a remote copy.',
+        );
       } else if (localReplica.status === 'ipfs+device') {
-        setReplicaStatusNote('Distributed mode active: this device stored an IPFS copy and Pinata stored a remote copy.');
+        setReplicaStatusNote(
+          'Distributed mode active: this device stored an IPFS copy and Pinata stored a remote copy.',
+        );
       } else {
-        setReplicaStatusNote('Device copy saved locally. IPFS node was limited for this checkpoint, remote pinning still continues.');
+        setReplicaStatusNote(
+          'Device copy saved locally. IPFS node was limited for this checkpoint, remote pinning still continues.',
+        );
       }
     } catch (localReplicaError) {
       console.error('Local replica error:', localReplicaError);
-      setReplicaStatusNote('Local replica failed for this checkpoint. Remote pinning still continues.');
+      setReplicaStatusNote(
+        'Local replica failed for this checkpoint. Remote pinning still continues.',
+      );
     }
 
-    await gemini.pinSessionToIpfs({
-      sessionId,
-      userId: user.id,
-      summary,
-      history,
-      pinnedAt: nowIso
-    }).then((ipfsResult) => {
-      setActiveSessionIpfs({
-        cid: ipfsResult.cid,
-        uri: ipfsResult.uri,
-        gatewayUrl: ipfsResult.gatewayUrl,
-        pinnedAt: nowIso
+    await gemini
+      .pinSessionToIpfs({
+        sessionId,
+        userId: user.id,
+        summary,
+        history,
+        pinnedAt: nowIso,
+      })
+      .then((ipfsResult) => {
+        setActiveSessionIpfs({
+          cid: ipfsResult.cid,
+          uri: ipfsResult.uri,
+          gatewayUrl: ipfsResult.gatewayUrl,
+          pinnedAt: nowIso,
+        });
       });
-    });
   };
 
   const handleSessionEnd = async (history: ChatMessage[]) => {
@@ -2128,19 +2507,19 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         end_time_stamp: endTimestamp,
         keywords: [],
         emotion: 'NEUTRAL',
-        summary: 'Summary unavailable.'
+        summary: 'Summary unavailable.',
       };
 
       try {
         summary = await gemini.generateSummary(history, user.id);
       } catch (summaryError) {
-        console.error("Summary error:", summaryError);
+        console.error('Summary error:', summaryError);
       }
 
       summary = {
         ...summary,
         start_time_stamp: startTimestamp,
-        end_time_stamp: endTimestamp
+        end_time_stamp: endTimestamp,
       };
       let ipfs: IpfsPinInfo | undefined = activeSessionIpfs || undefined;
       let localReplica: LocalReplicaInfo | undefined = activeSessionReplica || undefined;
@@ -2153,18 +2532,26 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
             userId: user.id,
             summary,
             history,
-            pinnedAt: nowIso
+            pinnedAt: nowIso,
           });
           localReplica = replica;
           setActiveSessionReplica(replica);
           if (replica.mode === 'kubo') {
-            setReplicaStatusNote('Distributed mode active: this laptop Kubo node stored a local IPFS copy and Pinata stored a remote copy.');
+            setReplicaStatusNote(
+              'Distributed mode active: this laptop Kubo node stored a local IPFS copy and Pinata stored a remote copy.',
+            );
           } else if (replica.mode === 'helia') {
-            setReplicaStatusNote('Helia fallback active: browser IPFS stored a local copy and Pinata stored a remote copy.');
+            setReplicaStatusNote(
+              'Helia fallback active: browser IPFS stored a local copy and Pinata stored a remote copy.',
+            );
           } else if (replica.status === 'ipfs+device') {
-            setReplicaStatusNote('Distributed mode active: this device stored an IPFS copy and Pinata stored a remote copy.');
+            setReplicaStatusNote(
+              'Distributed mode active: this device stored an IPFS copy and Pinata stored a remote copy.',
+            );
           } else {
-            setReplicaStatusNote('Device copy saved locally. IPFS node was limited, remote pinning still continues.');
+            setReplicaStatusNote(
+              'Device copy saved locally. IPFS node was limited, remote pinning still continues.',
+            );
           }
         } catch (replicaError) {
           console.error('Session replica error:', replicaError);
@@ -2179,13 +2566,13 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
             userId: user.id,
             summary,
             history,
-            pinnedAt
+            pinnedAt,
           });
           ipfs = {
             cid: ipfsResult.cid,
             uri: ipfsResult.uri,
             gatewayUrl: ipfsResult.gatewayUrl,
-            pinnedAt
+            pinnedAt,
           };
         }
 
@@ -2194,7 +2581,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
             const chainResult = await gemini.storeSessionCidOnChain({
               userId: user.id,
               sessionId,
-              cid: ipfs.cid
+              cid: ipfs.cid,
             });
 
             if (chainResult.record) {
@@ -2202,11 +2589,11 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 txHash: chainResult.record.txHash,
                 chainId: Number(chainResult.record.chainId) || 0,
                 contractAddress: chainResult.record.contractAddress || '',
-                storedAt: chainResult.record.timestamp || pinnedAt
+                storedAt: chainResult.record.timestamp || pinnedAt,
               };
             }
           } catch (chainError) {
-            console.error("Blockchain store error:", chainError);
+            console.error('Blockchain store error:', chainError);
             setChainStatusError('Server could not complete blockchain proof for this session.');
           }
         }
@@ -2217,20 +2604,20 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
           summary,
           history,
           pinnedAt,
-          ...(ipfs?.cid ? { cid: ipfs.cid } : {})
+          ...(ipfs?.cid ? { cid: ipfs.cid } : {}),
         });
       } catch (ipfsError) {
-        console.error("IPFS pin error:", ipfsError);
+        console.error('IPFS pin error:', ipfsError);
         try {
           await gemini.archiveSession({
             sessionId,
             userId: user.id,
             summary,
             history,
-            pinnedAt: new Date().toISOString()
+            pinnedAt: new Date().toISOString(),
           });
         } catch (archiveError) {
-          console.error("Session archive error:", archiveError);
+          console.error('Session archive error:', archiveError);
         }
       }
 
@@ -2241,11 +2628,11 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         status: 'completed',
         ...(ipfs ? { ipfs } : {}),
         ...(localReplica ? { localReplica } : {}),
-        ...(onChain ? { onChain } : {})
+        ...(onChain ? { onChain } : {}),
       };
       saveSessions((prev) => [newSession, ...prev]);
     } catch (e) {
-      console.error("Session end error:", e);
+      console.error('Session end error:', e);
     } finally {
       setIsProcessing(false);
       setActiveSessionId(null);
@@ -2264,10 +2651,14 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Server-secured</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+              Server-secured
+            </span>
             <span className="text-xs text-emerald-700 font-medium">No wallet required</span>
           </div>
-          <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border ${replicaBadge.className}`}>
+          <div
+            className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border ${replicaBadge.className}`}
+          >
             <span className="text-[10px] font-bold uppercase tracking-widest">IPFS Mode</span>
             <span className="text-xs font-medium">{replicaBadge.label}</span>
           </div>
@@ -2353,13 +2744,15 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 <Plus size={20} /> New Session
               </button>
             </div>
-            <SessionList 
-              sessions={visibleSessions} 
-              onSelect={(s) => { setSelectedSession(s); setView('view_session'); }} 
+            <SessionList
+              sessions={visibleSessions}
+              onSelect={(s) => {
+                setSelectedSession(s);
+                setView('view_session');
+              }}
               onDelete={(s) => handleDeleteSession(s.id)}
-              showSummary={false} 
+              showSummary={false}
             />
-
           </div>
         )}
 
@@ -2377,21 +2770,33 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
 
         {view === 'chat' && (
           <div className="h-[calc(100vh-12rem)]">
-            <ChatWindow userId={user.id} onSessionEnd={handleSessionEnd} onSessionCheckpoint={handleSessionCheckpoint} />
+            <ChatWindow
+              userId={user.id}
+              onSessionEnd={handleSessionEnd}
+              onSessionCheckpoint={handleSessionCheckpoint}
+            />
           </div>
         )}
 
         {view === 'view_session' && selectedSession && (
           <div className="max-w-3xl mx-auto space-y-6">
-            <button onClick={() => setView('list')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors text-sm">
+            <button
+              onClick={() => setView('list')}
+              className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors text-sm"
+            >
               <ChevronLeft size={16} /> Back
             </button>
             <div className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100 space-y-6">
               <h3 className="font-serif text-2xl text-slate-900">Session Review</h3>
               <div className="space-y-6 pt-4 border-t border-slate-50">
                 {selectedSession.history.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] px-4 py-2 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'}`}>
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[85%] px-4 py-2 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'}`}
+                    >
                       {msg.content}
                     </div>
                   </div>
@@ -2480,8 +2885,8 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
-        <Route 
-          path="/" 
+        <Route
+          path="/"
           element={
             user ? (
               user.role === 'guardian' ? (
@@ -2496,7 +2901,7 @@ const App: React.FC = () => {
             ) : (
               <Login onLogin={handleLogin} />
             )
-          } 
+          }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage } from '../types.ts';
 import { gemini } from '../services/geminiService.ts';
@@ -19,11 +18,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSession
 
   // Initial greeting
   useEffect(() => {
-    setHistory([{
-      role: 'assistant',
-      content: 'How are you feeling today?',
-      timestamp: new Date().toISOString()
-    }]);
+    setHistory([
+      {
+        role: 'assistant',
+        content: 'How are you feeling today?',
+        timestamp: new Date().toISOString(),
+      },
+    ]);
   }, []);
 
   // Auto-scroll to bottom whenever history updates
@@ -41,14 +42,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSession
     const userMsg: ChatMessage = {
       role: 'user',
       content: messageText,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     // Store the history before the update for the API call
     const previousHistory = [...history];
-    
+
     // Update state optimistically
-    setHistory(prev => [...prev, userMsg]);
+    setHistory((prev) => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
@@ -56,14 +57,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSession
       // Pass the history (without the new message) to the service.
       // The chat.sendMessage API will internally handle adding the current user input to context.
       const responseText = await gemini.getChatResponse(previousHistory, messageText);
-      
+
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         content: responseText,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
-      setHistory(prev => [...prev, assistantMsg]);
+      setHistory((prev) => [...prev, assistantMsg]);
       const checkpointHistory = [...previousHistory, userMsg, assistantMsg];
       if (onSessionCheckpoint) {
         void Promise.resolve(onSessionCheckpoint(checkpointHistory)).catch((checkpointError) => {
@@ -71,13 +72,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSession
         });
       }
     } catch (error) {
-      console.error("Chat Error:", error);
+      console.error('Chat Error:', error);
       const errorMsg: ChatMessage = {
         role: 'assistant',
         content: "I'm having a brief connection issue. Let's try again in a moment.",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-      setHistory(prev => [...prev, errorMsg]);
+      setHistory((prev) => [...prev, errorMsg]);
       const checkpointHistory = [...previousHistory, userMsg, errorMsg];
       if (onSessionCheckpoint) {
         void Promise.resolve(onSessionCheckpoint(checkpointHistory)).catch((checkpointError) => {
@@ -93,13 +94,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSession
     const finalMsg: ChatMessage = {
       role: 'assistant',
       content: 'This session has ended and is securely stored.',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
-    
+
     const finalHistory = [...history, finalMsg];
     setHistory(finalHistory);
     setIsEnding(true);
-    
+
     setTimeout(() => {
       onSessionEnd(finalHistory);
     }, 1500);
@@ -112,7 +113,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSession
           <h2 className="font-serif text-xl text-slate-800">Care Connect Listener</h2>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-            <span className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Active Session</span>
+            <span className="text-xs text-slate-500 uppercase tracking-widest font-semibold">
+              Active Session
+            </span>
           </div>
         </div>
         <button
@@ -125,21 +128,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ userId, onSessionEnd, onSession
         </button>
       </div>
 
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
-      >
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
         {history.map((msg, i) => (
-          <div 
-            key={i} 
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={`
               max-w-[80%] px-5 py-3 rounded-2xl text-base leading-relaxed
-              ${msg.role === 'user' 
-                ? 'bg-indigo-600 text-white rounded-tr-none' 
-                : 'bg-slate-100 text-slate-800 rounded-tl-none'}
-            `}>
+              ${
+                msg.role === 'user'
+                  ? 'bg-indigo-600 text-white rounded-tr-none'
+                  : 'bg-slate-100 text-slate-800 rounded-tl-none'
+              }
+            `}
+            >
               {msg.content}
             </div>
           </div>

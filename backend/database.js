@@ -1,15 +1,15 @@
-import Database from "better-sqlite3";
-import path from "path";
-import { fileURLToPath } from "url";
+import Database from 'better-sqlite3';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, "care-connect.db");
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'care-connect.db');
 const db = new Database(dbPath);
 
 // Enable foreign keys
-db.pragma("foreign_keys = ON");
+db.pragma('foreign_keys = ON');
 
 // Initialize database schema
 function initDatabase() {
@@ -38,17 +38,23 @@ function initDatabase() {
     )
   `);
 
-  const guardianColumns = db.prepare("PRAGMA table_info(guardians)").all().map((c) => c.name);
-  if (!guardianColumns.includes("guardian_password")) {
-    db.exec("ALTER TABLE guardians ADD COLUMN guardian_password TEXT");
+  const guardianColumns = db
+    .prepare('PRAGMA table_info(guardians)')
+    .all()
+    .map((c) => c.name);
+  if (!guardianColumns.includes('guardian_password')) {
+    db.exec('ALTER TABLE guardians ADD COLUMN guardian_password TEXT');
   }
 
-  const userColumns = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
-  if (!userColumns.includes("institution_access_code")) {
-    db.exec("ALTER TABLE users ADD COLUMN institution_access_code TEXT");
+  const userColumns = db
+    .prepare('PRAGMA table_info(users)')
+    .all()
+    .map((c) => c.name);
+  if (!userColumns.includes('institution_access_code')) {
+    db.exec('ALTER TABLE users ADD COLUMN institution_access_code TEXT');
   }
-  if (!userColumns.includes("institution_college_code")) {
-    db.exec("ALTER TABLE users ADD COLUMN institution_college_code TEXT");
+  if (!userColumns.includes('institution_college_code')) {
+    db.exec('ALTER TABLE users ADD COLUMN institution_college_code TEXT');
   }
 
   // Create counsellors table
@@ -65,15 +71,18 @@ function initDatabase() {
     )
   `);
 
-  const counsellorColumns = db.prepare("PRAGMA table_info(counsellors)").all().map((c) => c.name);
-  if (!counsellorColumns.includes("crr_number")) {
-    db.exec("ALTER TABLE counsellors ADD COLUMN crr_number TEXT");
+  const counsellorColumns = db
+    .prepare('PRAGMA table_info(counsellors)')
+    .all()
+    .map((c) => c.name);
+  if (!counsellorColumns.includes('crr_number')) {
+    db.exec('ALTER TABLE counsellors ADD COLUMN crr_number TEXT');
   }
-  if (!counsellorColumns.includes("aishe_code")) {
-    db.exec("ALTER TABLE counsellors ADD COLUMN aishe_code TEXT");
+  if (!counsellorColumns.includes('aishe_code')) {
+    db.exec('ALTER TABLE counsellors ADD COLUMN aishe_code TEXT');
   }
-  if (!counsellorColumns.includes("udise_code")) {
-    db.exec("ALTER TABLE counsellors ADD COLUMN udise_code TEXT");
+  if (!counsellorColumns.includes('udise_code')) {
+    db.exec('ALTER TABLE counsellors ADD COLUMN udise_code TEXT');
   }
 
   // Create global counsellors table (not linked to single student)
@@ -90,9 +99,12 @@ function initDatabase() {
     )
   `);
 
-  const counsellorGlobalColumns = db.prepare("PRAGMA table_info(counsellors_global)").all().map((c) => c.name);
-  if (!counsellorGlobalColumns.includes("college_code")) {
-    db.exec("ALTER TABLE counsellors_global ADD COLUMN college_code TEXT");
+  const counsellorGlobalColumns = db
+    .prepare('PRAGMA table_info(counsellors_global)')
+    .all()
+    .map((c) => c.name);
+  if (!counsellorGlobalColumns.includes('college_code')) {
+    db.exec('ALTER TABLE counsellors_global ADD COLUMN college_code TEXT');
   }
   db.exec(`
     UPDATE counsellors_global
@@ -128,18 +140,23 @@ function initDatabase() {
     )
   `);
 
-  const institutionColumns = db.prepare("PRAGMA table_info(institutions)").all().map((c) => c.name);
-  if (!institutionColumns.includes("aishe_code")) {
-    db.exec("ALTER TABLE institutions ADD COLUMN aishe_code TEXT");
+  const institutionColumns = db
+    .prepare('PRAGMA table_info(institutions)')
+    .all()
+    .map((c) => c.name);
+  if (!institutionColumns.includes('aishe_code')) {
+    db.exec('ALTER TABLE institutions ADD COLUMN aishe_code TEXT');
   }
-  if (!institutionColumns.includes("udise_code")) {
-    db.exec("ALTER TABLE institutions ADD COLUMN udise_code TEXT");
+  if (!institutionColumns.includes('udise_code')) {
+    db.exec('ALTER TABLE institutions ADD COLUMN udise_code TEXT');
   }
-  if (!institutionColumns.includes("college_code")) {
-    db.exec("ALTER TABLE institutions ADD COLUMN college_code TEXT");
+  if (!institutionColumns.includes('college_code')) {
+    db.exec('ALTER TABLE institutions ADD COLUMN college_code TEXT');
   }
 
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_institutions_college_code ON institutions(college_code)");
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_institutions_college_code ON institutions(college_code)',
+  );
 
   // Create global institutions table (not linked to single student)
   db.exec(`
@@ -154,7 +171,9 @@ function initDatabase() {
     )
   `);
 
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_institutions_global_college_code ON institutions_global(college_code)");
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_institutions_global_college_code ON institutions_global(college_code)',
+  );
 
   // Create care network links (student-centered graph of connected actors)
   db.exec(`
@@ -172,9 +191,11 @@ function initDatabase() {
     )
   `);
 
-  db.exec("CREATE INDEX IF NOT EXISTS idx_network_student_id ON network_connections(student_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_network_actor ON network_connections(actor_id, actor_role)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_network_status ON network_connections(status)");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_network_student_id ON network_connections(student_id)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_network_actor ON network_connections(actor_id, actor_role)',
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_network_status ON network_connections(status)');
 
   // Create counsellor escalation requests from guardians/institutions
   db.exec(`
@@ -196,9 +217,15 @@ function initDatabase() {
     )
   `);
 
-  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_student ON counsellor_requests(student_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_status ON counsellor_requests(status)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_requests_created_at ON counsellor_requests(created_at DESC)");
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_counsellor_requests_student ON counsellor_requests(student_id)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_counsellor_requests_status ON counsellor_requests(status)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_counsellor_requests_created_at ON counsellor_requests(created_at DESC)',
+  );
 
   // Create counsellor schedule entries for follow-up/support sessions
   db.exec(`
@@ -216,13 +243,22 @@ function initDatabase() {
     )
   `);
 
-  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_student ON counsellor_schedules(student_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_counsellor ON counsellor_schedules(counsellor_email)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_when ON counsellor_schedules(scheduled_for DESC)");
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_student ON counsellor_schedules(student_id)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_counsellor ON counsellor_schedules(counsellor_email)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_counsellor_schedules_when ON counsellor_schedules(scheduled_for DESC)',
+  );
 
-  const counsellorScheduleColumns = db.prepare("PRAGMA table_info(counsellor_schedules)").all().map((c) => c.name);
-  if (!counsellorScheduleColumns.includes("student_read_at")) {
-    db.exec("ALTER TABLE counsellor_schedules ADD COLUMN student_read_at DATETIME");
+  const counsellorScheduleColumns = db
+    .prepare('PRAGMA table_info(counsellor_schedules)')
+    .all()
+    .map((c) => c.name);
+  if (!counsellorScheduleColumns.includes('student_read_at')) {
+    db.exec('ALTER TABLE counsellor_schedules ADD COLUMN student_read_at DATETIME');
   }
 
   // Create session archive table for non-IPFS fallback retrieval
@@ -239,10 +275,14 @@ function initDatabase() {
     )
   `);
 
-  db.exec("CREATE INDEX IF NOT EXISTS idx_session_archives_student ON session_archives(student_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_session_archives_created ON session_archives(created_at DESC)");
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_session_archives_student ON session_archives(student_id)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_session_archives_created ON session_archives(created_at DESC)',
+  );
 
-  console.log("✅ Database initialized successfully");
+  console.log('✅ Database initialized successfully');
 }
 
 // Initialize on import

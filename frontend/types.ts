@@ -1,4 +1,3 @@
-
 export type Emotion = 'CRITICAL' | 'BAD' | 'NEUTRAL' | 'GOOD' | 'HAPPY';
 
 export interface ChatMessage {
@@ -59,10 +58,10 @@ export interface User {
   name?: string;
   studentEmail?: string;
   studentId?: string;
-  organization?: string;      // For counsellors
-  institutionName?: string;   // For institutions
-  collegeCode?: string;       // For institutions (login identifier)
-  crrNumber?: string;         // For counsellors
+  organization?: string; // For counsellors
+  institutionName?: string; // For institutions
+  collegeCode?: string; // For institutions (login identifier)
+  crrNumber?: string; // For counsellors
 }
 
 export interface CounsellorStudent {

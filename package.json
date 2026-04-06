@@ -5,9 +5,19 @@
   "type": "module",
   "scripts": {
     "start": "cd backend && node server.js",
-    "install-backend": "cd backend && npm install"
+    "install-backend": "cd backend && npm install",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend && npm run lint:contracts",
+    "lint:contracts": "solhint \"contracts/**/*.sol\"",
+    "typecheck": "npm run typecheck --prefix frontend"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "prettier-plugin-solidity": "^1.4.2",
+    "solhint": "^5.0.5"
   }
 }

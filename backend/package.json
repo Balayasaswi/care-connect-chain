@@ -7,7 +7,9 @@
     "start": "node server.js",
     "deploy:amoy": "node scripts/deploy-amoy-cid-registry.mjs",
     "railway:env:skip": "node scripts/print-railway-env.mjs skip",
-    "railway:env:amoy": "node scripts/print-railway-env.mjs amoy"
+    "railway:env:amoy": "node scripts/print-railway-env.mjs amoy",
+    "lint": "eslint . --ext .js,.mjs",
+    "lint:fix": "eslint . --ext .js,.mjs --fix"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -22,5 +24,10 @@
     "groq-sdk": "^0.37.0",
     "solc": "^0.8.30",
     "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.2",
+    "globals": "^15.15.0"
   }
 }

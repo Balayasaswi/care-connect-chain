@@ -56,6 +56,32 @@ cd contracts
 # Deploy using your blockchain framework
 ```
 
+## Code Standards
+
+This project now uses a shared quality baseline across backend, frontend, and contracts.
+
+Run from repository root:
+
+```bash
+npm run format
+npm run format:check
+npm run lint
+npm run typecheck
+```
+
+What each command does:
+
+- `format`: Formats code using Prettier (including Solidity files via plugin)
+- `format:check`: Verifies formatting without modifying files
+- `lint`: Runs ESLint for backend and frontend, plus Solhint for contracts
+- `typecheck`: Runs TypeScript checks for the frontend
+
+Current rollout policy:
+
+- Lint warnings are allowed temporarily to support incremental cleanup
+- Typecheck currently reports pre-existing issues that should be fixed in follow-up work
+- `backend/server.js` is temporarily excluded from Prettier checks to avoid disruptive large-file churn
+
 ## Configuration
 
 ### Backend Environment Variables (.env)
@@ -86,11 +112,13 @@ Configure blockchain and service endpoints as needed.
 ## Railway Deployment (Single Service)
 
 This repository is configured for one Railway service that:
+
 - Builds `frontend/dist`
 - Starts `backend/server.js`
 - Serves the frontend from the backend process
 
 Files used by Railway:
+
 - `railway.json` for build command
 - `Procfile` for start command
 
@@ -101,17 +129,20 @@ Files used by Railway:
 3. Add environment variables in Railway service settings:
 
 Required:
+
 - `GROQ_API_KEY`
 - `HOST=0.0.0.0`
 - `PORT` (Railway can inject this automatically)
 
 IPFS for cloud deployment:
+
 - `IPFS_PROVIDER=pinata`
 - `PINATA_JWT` (or `PINATA_API_KEY` + `PINATA_API_SECRET`)
 - Optional: `IPFS_GATEWAY_BASE=https://gateway.pinata.cloud/ipfs`
 - Optional: `IPFS_READ_GATEWAYS=https://gateway.pinata.cloud/ipfs,https://ipfs.io/ipfs`
 
 Blockchain proof (optional but recommended):
+
 - `BLOCKCHAIN_RPC_URL` (public testnet RPC)
 - `BLOCKCHAIN_PRIVATE_KEY`
 - `CID_REGISTRY_CONTRACT_ADDRESS`
@@ -130,6 +161,7 @@ If blockchain deployment is blocking you, do this first:
 4. Test one full chat session.
 
 Expected result:
+
 - App works fully (auth, chat, IPFS pin, session archive)
 - Blockchain proof is skipped gracefully until you configure testnet
 
@@ -175,6 +207,7 @@ npm run deploy:amoy
 ```
 
 7. Copy printed values into Railway service variables:
+
 - `BLOCKCHAIN_RPC_URL`
 - `BLOCKCHAIN_PRIVATE_KEY`
 - `CID_REGISTRY_CONTRACT_ADDRESS`
@@ -192,6 +225,7 @@ npm run railway:env:amoy
 ```
 
 Notes:
+
 - This is free for testing because Amoy uses test tokens.
 - Mainnet deployment always needs real gas fees.
 - Use `backend/.env.amoy.example` as template for local setup.
@@ -199,6 +233,7 @@ Notes:
 ## Distributed IPFS Behavior (Per Laptop)
 
 The frontend now stores each session in two places during active chat flow:
+
 - Device-local replica: browser storage on that laptop (persistent local copy)
 - Local laptop IPFS node replica: app tries local Kubo daemon first (`http://127.0.0.1:5001/api/v0` by default)
 - Browser IPFS node replica fallback: Helia + IndexedDB blockstore (when Kubo is not running)
@@ -229,6 +264,7 @@ Optional custom frontend origin allowlist:
 ```
 
 Important practical limits for browsers:
+
 - Browser IPFS peers are not always reachable like always-on server nodes.
 - Peer discovery and relay quality depends on browser/network restrictions.
 - If browser IPFS is limited, the app still keeps a device-local copy and continues remote pinning.
@@ -242,6 +278,7 @@ If you want a tiny private chain for testing or demos, use the bundled Besu netw
 ```
 
 This will:
+
 - Start a 4-node local blockchain with chain ID `1337`
 - Deploy `contracts/CIDRegistry.sol`
 - Write the deployed contract address into `backend/.env.local` and `frontend/.env.local`
@@ -264,12 +301,14 @@ Use this one command from the repository root:
 ```
 
 What it does:
+
 - Starts local IPFS daemon (if installed and not already running)
 - Starts backend on `0.0.0.0:5000`
 - Starts frontend on `0.0.0.0:5173`
 - Prints your laptop LAN URL for other devices on the same Wi-Fi
 
 Requirements:
+
 - `ipfs` CLI (Kubo) installed for local IPFS mode
 - Firewall allows inbound ports `5000` and `5173`
 
