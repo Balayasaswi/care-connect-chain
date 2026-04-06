@@ -360,6 +360,28 @@ function getGroqClient() {
   return groqClient;
 }
 
+function buildLocalCounsellorReply(message) {
+  const text = String(message || "").trim();
+  const lower = text.toLowerCase();
+
+  if (!text) {
+    return "I am here with you. Tell me what you are feeling right now, and we can take it one step at a time.";
+  }
+
+  const positivePattern = /\b(good|fine|okay|ok|better|great|happy|calm|relaxed|peaceful)\b/;
+  const distressPattern = /\b(sad|low|depressed|anxious|anxiety|panic|stressed|stress|overwhelmed|scared|angry|hurt|lonely|bad)\b/;
+
+  if (positivePattern.test(lower)) {
+    return "I am glad you are feeling better. What helped you feel this way today? We can build on that so it stays steady.";
+  }
+
+  if (distressPattern.test(lower)) {
+    return "That sounds really heavy, and I am glad you shared it. You do not have to hold it all at once. Would you like to start with what triggered this feeling today?";
+  }
+
+  return "Thank you for sharing that with me. I am here to support you. Can you tell me a little more about what is on your mind right now?";
+}
+
 function buildSummaryPrompt(userId, history) {
   const transcript = history
     .map((h) => `${h.role?.toUpperCase?.() || "USER"}: ${h.content}`)
@@ -1421,11 +1443,13 @@ app.get("/api/guardian/:studentId", (req, res) => {
 
 // Chat endpoint
 app.post("/api/chat", async (req, res) => {
+  const normalizedMessage = String(req.body?.message || "").trim();
+
   try {
     const { history = [], message, systemInstruction } = req.body;
-    const normalizedMessage = String(message || "").trim();
+    const requestMessage = String(message || "").trim();
 
-    if (!normalizedMessage) {
+    if (!requestMessage) {
       return res.status(400).json({ error: "Message is required" });
     }
 
@@ -1434,11 +1458,8 @@ app.post("/api/chat", async (req, res) => {
       groq = getGroqClient();
     } catch (clientError) {
       if (String(clientError?.message || "").includes("GROQ_API_KEY is missing")) {
-        const excerpt = normalizedMessage.length > 180
-          ? `${normalizedMessage.slice(0, 177)}...`
-          : normalizedMessage;
         return res.json({
-          text: `Thank you for sharing this: "${excerpt}". I am here with you. What part feels heaviest right now?`
+          text: buildLocalCounsellorReply(requestMessage)
         });
       }
       throw clientError;
@@ -1462,7 +1483,7 @@ app.post("/api/chat", async (req, res) => {
       messages.push({ role: "system", content: String(systemInstruction).trim() });
     }
     messages.push(...safeHistory);
-    messages.push({ role: "user", content: normalizedMessage });
+    messages.push({ role: "user", content: requestMessage });
 
     const response = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
@@ -1471,16 +1492,16 @@ app.post("/api/chat", async (req, res) => {
       max_completion_tokens: 280,
     });
 
-    res.json({
-      text: String(response.choices[0]?.message?.content || "").trim(),
-    });
+    const modelText = String(response.choices[0]?.message?.content || "").trim();
+    if (!modelText) {
+      return res.json({ text: buildLocalCounsellorReply(requestMessage) });
+    }
+
+    res.json({ text: modelText });
 
   } catch (error) {
     console.error("🔥 GROQ GENERATE FAILED:", error);
-    if (String(error?.message || "").includes("GROQ_API_KEY is missing")) {
-      return res.status(503).json({ error: "GROQ_API_KEY is missing on backend" });
-    }
-    res.status(500).json({ error: "Groq service failed" });
+    return res.json({ text: buildLocalCounsellorReply(normalizedMessage) });
   }
 });
 
