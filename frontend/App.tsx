@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest, CounsellorSchedule } from './types.ts';
+import { User, SessionRecord, ChatMessage, UserRole, IpfsPinInfo, CounsellorStudent, CounsellorRequest, CounsellorSchedule, LocalReplicaInfo } from './types.ts';
 import { gemini } from './services/geminiService.ts';
+import { storeSessionReplicaOnDevice } from './services/distributedStorage.ts';
 import ChatWindow from './components/ChatWindow.tsx';
 import SessionList from './components/SessionList.tsx';
 import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, History, AlertCircle, Building2, Stethoscope, Bell } from 'lucide-react';
@@ -1753,6 +1754,8 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionIpfs, setActiveSessionIpfs] = useState<IpfsPinInfo | null>(null);
+  const [activeSessionReplica, setActiveSessionReplica] = useState<LocalReplicaInfo | null>(null);
+  const [replicaStatusNote, setReplicaStatusNote] = useState('');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -1947,6 +1950,25 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       summary: summaryPreview
     };
 
+    try {
+      const localReplica = await storeSessionReplicaOnDevice({
+        sessionId,
+        userId: user.id,
+        summary,
+        history,
+        pinnedAt: nowIso
+      });
+      setActiveSessionReplica(localReplica);
+      if (localReplica.status === 'ipfs+device') {
+        setReplicaStatusNote('Distributed mode: one copy is on this device IPFS node and one copy is pinned remotely.');
+      } else {
+        setReplicaStatusNote('Device copy saved locally. Browser IPFS node was limited for this checkpoint, remote pinning still continues.');
+      }
+    } catch (localReplicaError) {
+      console.error('Local replica error:', localReplicaError);
+      setReplicaStatusNote('Local replica failed for this checkpoint. Remote pinning still continues.');
+    }
+
     await gemini.pinSessionToIpfs({
       sessionId,
       userId: user.id,
@@ -1992,7 +2014,29 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         end_time_stamp: endTimestamp
       };
       let ipfs: IpfsPinInfo | undefined = activeSessionIpfs || undefined;
+      let localReplica: LocalReplicaInfo | undefined = activeSessionReplica || undefined;
       let onChain: SessionRecord['onChain'] | undefined;
+
+      if (!localReplica) {
+        try {
+          const replica = await storeSessionReplicaOnDevice({
+            sessionId,
+            userId: user.id,
+            summary,
+            history,
+            pinnedAt: nowIso
+          });
+          localReplica = replica;
+          setActiveSessionReplica(replica);
+          if (replica.status === 'ipfs+device') {
+            setReplicaStatusNote('Distributed mode: one copy is on this device IPFS node and one copy is pinned remotely.');
+          } else {
+            setReplicaStatusNote('Device copy saved locally. Browser IPFS node was limited, remote pinning still continues.');
+          }
+        } catch (replicaError) {
+          console.error('Session replica error:', replicaError);
+        }
+      }
 
       try {
         const pinnedAt = new Date().toISOString();
@@ -2063,6 +2107,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         history,
         status: 'completed',
         ...(ipfs ? { ipfs } : {}),
+        ...(localReplica ? { localReplica } : {}),
         ...(onChain ? { onChain } : {})
       };
       saveSessions((prev) => [newSession, ...prev]);
@@ -2072,6 +2117,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       setIsProcessing(false);
       setActiveSessionId(null);
       setActiveSessionIpfs(null);
+      setActiveSessionReplica(null);
       setView('list');
     }
   };
@@ -2146,6 +2192,11 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 {chainStatusError}
               </div>
             )}
+            {replicaStatusNote && (
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50 text-indigo-700 px-4 py-3 text-sm">
+                {replicaStatusNote}
+              </div>
+            )}
 
             <div className="flex justify-between items-center">
               <div>
@@ -2156,6 +2207,8 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 onClick={() => {
                   setActiveSessionId(`session_${Date.now()}`);
                   setActiveSessionIpfs(null);
+                  setActiveSessionReplica(null);
+                  setReplicaStatusNote('');
                   setView('chat');
                 }}
                 className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-medium"

@@ -126,6 +126,20 @@ Blockchain proof (optional but recommended):
 - If local override files exist from demo scripts (`backend/.env.local`, `frontend/.env.local`), do not commit them.
 - Frontend defaults to same-origin API in production, so `VITE_API_BASE_URL` is optional for single-service deployment.
 
+## Distributed IPFS Behavior (Per Laptop)
+
+The frontend now stores each session in two places during active chat flow:
+- Device-local replica: browser storage on that laptop (persistent local copy)
+- Browser IPFS node replica: Helia + IndexedDB blockstore on that laptop (when browser networking allows)
+- Remote pinned replica: backend pinning flow (Pinata) for shared availability
+
+This gives each participating laptop its own local data replica and attempts local IPFS-node behavior, while still keeping a remote pinned copy.
+
+Important practical limits for browsers:
+- Browser IPFS peers are not always reachable like always-on server nodes.
+- Peer discovery and relay quality depends on browser/network restrictions.
+- If browser IPFS is limited, the app still keeps a device-local copy and continues remote pinning.
+
 ## Small Local Blockchain
 
 If you want a tiny private chain for testing or demos, use the bundled Besu network:

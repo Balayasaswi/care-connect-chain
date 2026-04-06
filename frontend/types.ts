@@ -23,6 +23,14 @@ export interface IpfsPinInfo {
   pinnedAt: string;
 }
 
+export interface LocalReplicaInfo {
+  storageKey: string;
+  localCid?: string;
+  storedAt: string;
+  status: 'ipfs+device' | 'device-only';
+  error?: string;
+}
+
 export interface OnChainRecord {
   txHash: string;
   chainId: number;
@@ -36,6 +44,7 @@ export interface SessionRecord {
   history: ChatMessage[];
   status: 'active' | 'completed';
   ipfs?: IpfsPinInfo;
+  localReplica?: LocalReplicaInfo;
   onChain?: OnChainRecord;
 }
 
