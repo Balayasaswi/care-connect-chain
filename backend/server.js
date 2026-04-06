@@ -1423,8 +1423,9 @@ app.get("/api/guardian/:studentId", (req, res) => {
 app.post("/api/chat", async (req, res) => {
   try {
     const { history = [], message, systemInstruction } = req.body;
+    const normalizedMessage = String(message || "").trim();
 
-    if (!message) {
+    if (!normalizedMessage) {
       return res.status(400).json({ error: "Message is required" });
     }
 
@@ -1433,33 +1434,45 @@ app.post("/api/chat", async (req, res) => {
       groq = getGroqClient();
     } catch (clientError) {
       if (String(clientError?.message || "").includes("GROQ_API_KEY is missing")) {
+        const excerpt = normalizedMessage.length > 180
+          ? `${normalizedMessage.slice(0, 177)}...`
+          : normalizedMessage;
         return res.json({
-          text: "I can still support you in local mode. Tell me what you are feeling right now, and I will help you break it down into small next steps."
+          text: `Thank you for sharing this: "${excerpt}". I am here with you. What part feels heaviest right now?`
         });
       }
       throw clientError;
     }
 
-    // Build conversation text safely
-    const conversation = [
-      `SYSTEM:\n${systemInstruction}`,
-      ...history.map(h => `${h.role.toUpperCase()}: ${h.content}`),
-      `USER: ${message}`
-    ].join("\n\n");
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter((item) => {
+            const role = String(item?.role || "").toLowerCase();
+            const content = String(item?.content || "").trim();
+            return (role === "user" || role === "assistant") && Boolean(content);
+          })
+          .map((item) => ({
+            role: String(item.role).toLowerCase(),
+            content: String(item.content).trim()
+          }))
+      : [];
+
+    const messages = [];
+    if (String(systemInstruction || "").trim()) {
+      messages.push({ role: "system", content: String(systemInstruction).trim() });
+    }
+    messages.push(...safeHistory);
+    messages.push({ role: "user", content: normalizedMessage });
 
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",  // ✅ Current Groq production model
-      messages: [
-        {
-          role: "user",
-          content: conversation,
-        },
-      ],
-      temperature: 0.7,
+      model: "llama-3.3-70b-versatile",
+      messages,
+      temperature: 0.5,
+      max_completion_tokens: 280,
     });
 
     res.json({
-      text: response.choices[0]?.message?.content ?? "",
+      text: String(response.choices[0]?.message?.content || "").trim(),
     });
 
   } catch (error) {
