@@ -10,12 +10,32 @@
     "format:check": "prettier --check .",
     "lint": "npm run lint --prefix backend && npm run lint --prefix frontend && npm run lint:contracts",
     "lint:contracts": "solhint \"contracts/**/*.sol\"",
-    "typecheck": "npm run typecheck --prefix frontend"
+    "typecheck": "npm run typecheck --prefix frontend",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx,js,jsx}": [
+      "npm --prefix frontend exec eslint --fix",
+      "prettier --write"
+    ],
+    "backend/**/*.{js,mjs,cjs}": [
+      "npm --prefix backend exec eslint --fix",
+      "prettier --write"
+    ],
+    "contracts/**/*.sol": [
+      "solhint",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,html}": [
+      "prettier --write"
+    ]
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0",
     "prettier": "^3.5.3",
     "prettier-plugin-solidity": "^1.4.2",
     "solhint": "^5.0.5"

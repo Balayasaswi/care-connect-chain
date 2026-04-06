@@ -9,6 +9,7 @@ import {
   CounsellorStudent,
   CounsellorRequest,
   CounsellorSchedule,
+  SessionSummary,
   LocalReplicaInfo,
 } from './types.ts';
 import { gemini } from './services/geminiService.ts';
@@ -1134,8 +1135,8 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
     return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
   });
 
-  const highlyCriticalStudents = Array.from(
-    new Map(
+  const highlyCriticalStudents: CounsellorStudent[] = Array.from(
+    new Map<string, CounsellorStudent>(
       requests
         .filter((request) => request.urgency === 'critical' && request.status !== 'session_created')
         .map((request) => {
@@ -2433,7 +2434,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
     const nowIso = new Date().toISOString();
     const summaryPreview = history[history.length - 1]?.content || 'Session in progress.';
 
-    const summary = {
+    const summary: SessionSummary = {
       userid: user.id,
       start_time_stamp: history[0]?.timestamp || nowIso,
       end_time_stamp: history[history.length - 1]?.timestamp || nowIso,
@@ -2501,7 +2502,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
       const nowIso = new Date().toISOString();
       const startTimestamp = history[0]?.timestamp || nowIso;
       const endTimestamp = history[history.length - 1]?.timestamp || nowIso;
-      let summary = {
+      let summary: SessionSummary = {
         userid: user.id,
         start_time_stamp: startTimestamp,
         end_time_stamp: endTimestamp,
@@ -2589,7 +2590,7 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 txHash: chainResult.record.txHash,
                 chainId: Number(chainResult.record.chainId) || 0,
                 contractAddress: chainResult.record.contractAddress || '',
-                storedAt: chainResult.record.timestamp || pinnedAt,
+                storedAt: chainResult.record.storedAt || pinnedAt,
               };
             }
           } catch (chainError) {

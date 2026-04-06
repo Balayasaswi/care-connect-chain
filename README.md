@@ -79,8 +79,13 @@ What each command does:
 Current rollout policy:
 
 - Lint warnings are allowed temporarily to support incremental cleanup
-- Typecheck currently reports pre-existing issues that should be fixed in follow-up work
+- Typecheck is enforced in CI and currently passes
 - `backend/server.js` is temporarily excluded from Prettier checks to avoid disruptive large-file churn
+
+Automation:
+
+- Pre-commit hook uses Husky + lint-staged to run targeted checks on staged files
+- GitHub Actions workflow runs `format:check`, `lint`, and `typecheck` on pull requests and pushes to `main`
 
 ## Configuration
 

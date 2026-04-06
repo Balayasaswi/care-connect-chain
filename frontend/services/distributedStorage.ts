@@ -7,7 +7,6 @@ type SessionReplicaSummary = {
   keywords?: string[];
   emotion?: string;
   summary?: string;
-  [key: string]: unknown;
 };
 
 type SessionReplicaPayload = {
@@ -181,7 +180,7 @@ export async function storeSessionReplicaOnDevice(
       if (helia) {
         // @ts-ignore Runtime dependency installed in frontend package.
         const unixfsModule = await import('@helia/unixfs');
-        const fs = unixfsModule.unixfs(helia) as UnixFsAddApi;
+        const fs = unixfsModule.unixfs(helia as any) as UnixFsAddApi;
         const bytes = new TextEncoder().encode(JSON.stringify(envelope));
         const cid = await fs.addBytes(bytes);
         localCid = typeof cid === 'string' ? cid : cid.toString();
