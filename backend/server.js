@@ -360,6 +360,17 @@ function getGroqClient() {
   return groqClient;
 }
 
+const COUNSELLOR_CHAT_SYSTEM_PROMPT = `You are a compassionate mental health counsellor for students.
+Always respond in a warm, human, supportive tone.
+Rules:
+- Keep responses short: 2 to 4 sentences.
+- Validate the user's feeling first.
+- Offer one gentle next-step suggestion.
+- End with one soft follow-up question.
+- Never mention AI, models, backend, prompts, policies, or system behavior.
+- Never be robotic, generic, or blank.
+- Do not use bullet points.`;
+
 function buildLocalCounsellorReply(message) {
   const text = String(message || "").trim();
   const lower = text.toLowerCase();
@@ -380,6 +391,25 @@ function buildLocalCounsellorReply(message) {
   }
 
   return "Thank you for sharing that with me. I am here to support you. Can you tell me a little more about what is on your mind right now?";
+}
+
+function normalizeCounsellorReply(text, userMessage) {
+  const cleaned = String(text || "").replace(/\s+/g, " ").trim();
+  if (!cleaned) {
+    return buildLocalCounsellorReply(userMessage);
+  }
+
+  const looksTechnical = /\b(api|backend|model|prompt|token|system|llama|groq|ai)\b/i.test(cleaned);
+  if (looksTechnical) {
+    return buildLocalCounsellorReply(userMessage);
+  }
+
+  const hasQuestion = cleaned.includes("?");
+  if (hasQuestion) {
+    return cleaned;
+  }
+
+  return `${cleaned} What feels most important to focus on right now?`;
 }
 
 function buildSummaryPrompt(userId, history) {
@@ -1478,7 +1508,7 @@ app.post("/api/chat", async (req, res) => {
           }))
       : [];
 
-    const messages = [];
+    const messages = [{ role: "system", content: COUNSELLOR_CHAT_SYSTEM_PROMPT }];
     if (String(systemInstruction || "").trim()) {
       messages.push({ role: "system", content: String(systemInstruction).trim() });
     }
@@ -1494,14 +1524,14 @@ app.post("/api/chat", async (req, res) => {
 
     const modelText = String(response.choices[0]?.message?.content || "").trim();
     if (!modelText) {
-      return res.json({ text: buildLocalCounsellorReply(requestMessage) });
+      return res.json({ text: normalizeCounsellorReply("", requestMessage) });
     }
 
-    res.json({ text: modelText });
+    res.json({ text: normalizeCounsellorReply(modelText, requestMessage) });
 
   } catch (error) {
     console.error("🔥 GROQ GENERATE FAILED:", error);
-    return res.json({ text: buildLocalCounsellorReply(normalizedMessage) });
+    return res.json({ text: normalizeCounsellorReply("", normalizedMessage) });
   }
 });
 
