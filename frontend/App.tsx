@@ -1757,6 +1757,48 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
 };
 
 // --- Institution Dashboard ---
+interface StudentMetric extends CounsellorStudent {
+  lastSessionDate?: string;
+  sessionCount: number;
+  lastEmotion?: string;
+  healthScore: number;
+  criticalCount: number;
+  badCount: number;
+}
+
+const calculateHealthScore = (sessions: SessionRecord[]): number => {
+  if (sessions.length === 0) return 0;
+  const emotionScore: { [key: string]: number } = {
+    HAPPY: 100,
+    GOOD: 75,
+    NEUTRAL: 50,
+    BAD: 25,
+    CRITICAL: 0,
+  };
+  const total = sessions.reduce((sum, session) => {
+    const emotion = String(session.summary?.emotion || 'NEUTRAL').toUpperCase();
+    return sum + (emotionScore[emotion] || 0);
+  }, 0);
+  return Math.round(total / sessions.length);
+};
+
+const getEmotionColor = (emotion?: string): string => {
+  switch (String(emotion || '').toUpperCase()) {
+    case 'CRITICAL':
+      return 'bg-rose-100 text-rose-700 border-rose-200';
+    case 'BAD':
+      return 'bg-amber-100 text-amber-700 border-amber-200';
+    case 'NEUTRAL':
+      return 'bg-slate-100 text-slate-700 border-slate-200';
+    case 'GOOD':
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'HAPPY':
+      return 'bg-green-100 text-green-700 border-green-200';
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200';
+  }
+};
+
 const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
   user,
   onLogout,
@@ -1765,6 +1807,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'not_found' | 'no_students' | 'ready'>('ready');
   const [students, setStudents] = useState<CounsellorStudent[]>([]);
+  const [studentMetrics, setStudentMetrics] = useState<Map<string, StudentMetric>>(new Map());
   const [studentSearch, setStudentSearch] = useState('');
   const [view, setView] = useState<'students' | 'student_summaries' | 'notifications'>('students');
   const [selectedStudent, setSelectedStudent] = useState<CounsellorStudent | null>(null);
@@ -1778,13 +1821,27 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
   const reportedSessionsStorageKey = `care_institution_reported_sessions_${user.id}`;
 
   const normalizedStudentSearch = studentSearch.trim().toLowerCase();
-  const filteredStudents = students.filter((student) => {
-    if (!normalizedStudentSearch) return true;
-    const name = String(student.username || '').toLowerCase();
-    const email = String(student.email || '').toLowerCase();
-    return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
-  });
-  const recommendedStudents = filteredStudents.slice(0, 5);
+  const filteredStudentMetrics = students
+    .map(
+      (s) =>
+        studentMetrics.get(s.id) || {
+          ...s,
+          sessionCount: 0,
+          healthScore: 0,
+          criticalCount: 0,
+          badCount: 0,
+        },
+    )
+    .filter((metric) => {
+      if (!normalizedStudentSearch) return true;
+      const name = String(metric.username || '').toLowerCase();
+      const email = String(metric.email || '').toLowerCase();
+      return name.includes(normalizedStudentSearch) || email.includes(normalizedStudentSearch);
+    })
+    .sort(
+      (a, b) =>
+        (b.criticalCount || 0) - (a.criticalCount || 0) || (b.badCount || 0) - (a.badCount || 0),
+    );
   const reportableSession = selectedStudentSessions.find((session) => {
     const emotion = String(session.summary?.emotion || '').toUpperCase();
     return emotion === 'BAD' || emotion === 'CRITICAL';
@@ -1839,6 +1896,26 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
       } else {
         setSelectedStudentReport('');
       }
+
+      // Update metrics
+      const criticalCount = normalized.filter(
+        (s) => String(s.summary?.emotion || '').toUpperCase() === 'CRITICAL',
+      ).length;
+      const badCount = normalized.filter(
+        (s) => String(s.summary?.emotion || '').toUpperCase() === 'BAD',
+      ).length;
+      const lastSession = normalized[normalized.length - 1];
+      setStudentMetrics((prev) =>
+        new Map(prev).set(student.id, {
+          ...student,
+          sessionCount: normalized.length,
+          healthScore: calculateHealthScore(normalized),
+          lastEmotion: lastSession?.summary?.emotion,
+          lastSessionDate: lastSession?.summary?.end_time_stamp,
+          criticalCount,
+          badCount,
+        }),
+      );
     } catch (err) {
       console.error('Institution student sessions fetch error:', err);
       setSelectedStudentSessions([]);
@@ -2048,46 +2125,114 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                  Recommended Students
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {recommendedStudents.map((student) => (
-                    <button
-                      key={`rec_${student.id}`}
-                      type="button"
-                      onClick={() => loadStudentSessions(student)}
-                      className="px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold hover:bg-amber-100"
-                    >
-                      {student.username || student.email}
-                    </button>
-                  ))}
-                  {recommendedStudents.length === 0 && (
-                    <span className="text-xs text-slate-500">
-                      No recommendations for this search.
-                    </span>
-                  )}
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                          Student Name
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                          Email
+                        </th>
+                        <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                          Sessions
+                        </th>
+                        <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                          Health %
+                        </th>
+                        <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                          Status
+                        </th>
+                        <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                          Risk
+                        </th>
+                        <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                          Last Meet
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredStudentMetrics.map((metric) => {
+                        const isSelected = selectedStudent?.id === metric.id;
+                        const lastMeetDate = metric.lastSessionDate
+                          ? new Date(metric.lastSessionDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'N/A';
+                        const healthColor =
+                          metric.healthScore >= 75
+                            ? 'text-green-700'
+                            : metric.healthScore >= 50
+                              ? 'text-amber-700'
+                              : 'text-rose-700';
+                        const riskLevel =
+                          metric.criticalCount > 0
+                            ? 'CRITICAL'
+                            : metric.badCount > 0
+                              ? 'AT RISK'
+                              : 'GOOD';
+                        const riskColor =
+                          riskLevel === 'CRITICAL'
+                            ? 'bg-rose-100 text-rose-700 border-rose-200'
+                            : riskLevel === 'AT RISK'
+                              ? 'bg-amber-100 text-amber-700 border-amber-200'
+                              : 'bg-green-100 text-green-700 border-green-200';
+                        return (
+                          <tr
+                            key={metric.id}
+                            onClick={() => loadStudentSessions(metric)}
+                            className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer transition-colors ${
+                              isSelected ? 'bg-amber-50 border-l-4 border-l-amber-400' : ''
+                            }`}
+                          >
+                            <td className="px-4 py-3 text-sm font-semibold text-slate-800">
+                              {metric.username || 'Student'}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-600">{metric.email}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                                {metric.sessionCount}
+                              </span>
+                            </td>
+                            <td
+                              className={`px-4 py-3 text-center text-sm font-bold ${healthColor}`}
+                            >
+                              {metric.healthScore}%
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span
+                                className={`inline-block px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight border ${getEmotionColor(
+                                  metric.lastEmotion,
+                                )}`}
+                              >
+                                {metric.lastEmotion || 'No Data'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span
+                                className={`inline-block px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight border ${riskColor}`}
+                              >
+                                {riskLevel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center text-xs text-slate-600">
+                              {lastMeetDate}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
+                {filteredStudentMetrics.length === 0 && (
+                  <p className="text-sm text-slate-500 text-center py-6">
+                    No students match your search.
+                  </p>
+                )}
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {filteredStudents.map((student) => (
-                  <button
-                    key={student.id}
-                    type="button"
-                    onClick={() => loadStudentSessions(student)}
-                    className={`text-left px-4 py-3 rounded-xl border transition-colors ${selectedStudent?.id === student.id ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
-                  >
-                    <p className="text-sm font-semibold text-slate-800">
-                      {student.username || 'Student'}
-                    </p>
-                    <p className="text-xs text-slate-500">{student.email}</p>
-                  </button>
-                ))}
-              </div>
-              {filteredStudents.length === 0 && (
-                <p className="text-sm text-slate-500">No students match your search.</p>
-              )}
             </div>
           )}
 
