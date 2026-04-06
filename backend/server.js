@@ -1247,7 +1247,12 @@ app.get("/api/student/notifications", (req, res) => {
       return res.status(400).json({ error: result.error });
     }
 
-    res.json({ notifications: result.schedules || [] });
+    const notifications = (result.schedules || []).map((item) => {
+      const { urgency: _urgency, ...safe } = item;
+      return safe;
+    });
+
+    res.json({ notifications });
   } catch (error) {
     console.error("Student notifications error:", error);
     res.status(500).json({ error: "Failed to fetch notifications" });
@@ -1268,7 +1273,8 @@ app.post("/api/student/notifications/:scheduleId/read", (req, res) => {
       return res.status(400).json({ error: result.error });
     }
 
-    res.json({ success: true, notification: result.schedule });
+    const { urgency: _urgency, ...safeNotification } = result.schedule || {};
+    res.json({ success: true, notification: safeNotification });
   } catch (error) {
     console.error("Student notification read error:", error);
     res.status(500).json({ error: "Failed to mark notification as read" });
