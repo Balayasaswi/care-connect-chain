@@ -120,6 +120,26 @@ Blockchain proof (optional but recommended):
 
 4. Deploy. Railway will run the configured build and start commands automatically.
 
+### Do This Right Now (Fastest Working Path)
+
+If blockchain deployment is blocking you, do this first:
+
+1. In Railway variables, use values from `backend/.railway.skip-mode.env.example`.
+2. Ensure `BLOCKCHAIN_OPTIONAL=true`.
+3. Redeploy Railway.
+4. Test one full chat session.
+
+Expected result:
+- App works fully (auth, chat, IPFS pin, session archive)
+- Blockchain proof is skipped gracefully until you configure testnet
+
+When you are ready for real testnet proof:
+
+1. Deploy CIDRegistry to Amoy using `npm run deploy:amoy` in `backend`.
+2. Use values from `backend/.railway.amoy-mode.env.example`.
+3. Replace `CID_REGISTRY_CONTRACT_ADDRESS` with your deployed address.
+4. Redeploy Railway.
+
 ### Important Notes
 
 - Do not use local-only values (for example `127.0.0.1:8545` or local IPFS daemon URLs) in Railway.
@@ -162,6 +182,14 @@ npm run deploy:amoy
 - `BLOCKCHAIN_OPTIONAL=true`
 
 8. Redeploy Railway service.
+
+Helper commands:
+
+```powershell
+cd backend
+npm run railway:env:skip
+npm run railway:env:amoy
+```
 
 Notes:
 - This is free for testing because Amoy uses test tokens.

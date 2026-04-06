@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "deploy:amoy": "node scripts/deploy-amoy-cid-registry.mjs"
+    "deploy:amoy": "node scripts/deploy-amoy-cid-registry.mjs",
+    "railway:env:skip": "node scripts/print-railway-env.mjs skip",
+    "railway:env:amoy": "node scripts/print-railway-env.mjs amoy"
   },
   "engines": {
     "node": ">=20.0.0"
