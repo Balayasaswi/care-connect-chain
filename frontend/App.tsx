@@ -108,7 +108,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
       } else if (role === 'counsellor') {
         if (counsellorPassword.length < 6) throw new Error('Enter a 6+ character password.');
         if (!accessCode.trim()) {
-          throw new Error('Provide AISHE or UDISE code.');
+          throw new Error('Provide College Code.');
         }
 
         if (mode === 'register') {
@@ -122,7 +122,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             counsellor_password: counsellorPassword,
             crr_number: crrNumber.trim(),
             organization: organization.trim() || undefined,
-            access_code: accessCode.trim() || undefined
+            college_code: accessCode.trim().toUpperCase() || undefined
           });
           onLogin({
             id: counsellorEmail.toLowerCase().trim(),
@@ -136,7 +136,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
           const res = await postJson(`${API_BASE_URL}/api/counsellor/login`, {
             login_id: counsellorLoginId.trim(),
             counsellor_password: counsellorPassword,
-            access_code: accessCode.trim() || undefined
+            college_code: accessCode.trim().toUpperCase() || undefined
           });
           onLogin({
             id: (res.counsellor?.counsellor_email || counsellorLoginId).toLowerCase().trim(),
@@ -304,10 +304,10 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
                       placeholder="CRR123456" required />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">AISHE/UDISE Code</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Code</label>
                     <input type="text" value={accessCode} onChange={(e) => setAccessCode(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                      placeholder="AISHE12345 or UDISE67890" required />
+                      placeholder="CC-ABC123" required />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Organization (optional)</label>
@@ -346,10 +346,10 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               )}
               {mode !== 'register' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">AISHE/UDISE Code</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Code</label>
                   <input type="text" value={accessCode} onChange={(e) => setAccessCode(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                    placeholder="AISHE12345 or UDISE67890" required />
+                    placeholder="CC-ABC123" required />
                 </div>
               )}
             </>

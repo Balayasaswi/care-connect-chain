@@ -689,9 +689,43 @@ function mapAccessCode(accessCode) {
   return { aisheCode: trimmed, udiseCode: null };
 }
 
-export async function registerCounsellor(counsellorEmail, counsellorPassword, crrNumber, organization, accessCode) {
+function getInstitutionScopeByCollegeCode(collegeCode) {
+  const normalizedCollegeCode = String(collegeCode || "").trim().toUpperCase();
+  if (!normalizedCollegeCode) return null;
+
+  return db.prepare(
+    `SELECT college_code, aishe_code, udise_code
+     FROM institutions_global
+     WHERE UPPER(COALESCE(college_code, '')) = ?`
+  ).get(normalizedCollegeCode);
+}
+
+function resolveCounsellorScope({ accessCode, collegeCode } = {}) {
+  const normalizedCollegeCode = String(collegeCode || "").trim().toUpperCase();
+  if (normalizedCollegeCode) {
+    const institution = getInstitutionScopeByCollegeCode(normalizedCollegeCode);
+    if (!institution) {
+      return { error: "Invalid college code" };
+    }
+
+    const aisheCode = String(institution.aishe_code || "").trim() || null;
+    const udiseCode = String(institution.udise_code || "").trim() || null;
+    if (!aisheCode && !udiseCode) {
+      return { error: "Institution does not have AISHE/UDISE scope configured" };
+    }
+
+    return { aisheCode, udiseCode };
+  }
+
+  return mapAccessCode(accessCode);
+}
+
+export async function registerCounsellor(counsellorEmail, counsellorPassword, crrNumber, organization, { accessCode, collegeCode } = {}) {
   try {
-    const normalized = mapAccessCode(accessCode);
+    const normalized = resolveCounsellorScope({ accessCode, collegeCode });
+    if (normalized?.error) {
+      return { success: false, error: normalized.error };
+    }
     const normalizedCrr = String(crrNumber || "").trim();
 
     if (normalizedCrr) {
@@ -726,9 +760,12 @@ export async function registerCounsellor(counsellorEmail, counsellorPassword, cr
   }
 }
 
-export async function loginCounsellor(loginId, counsellorPassword, accessCode) {
+export async function loginCounsellor(loginId, counsellorPassword, { accessCode, collegeCode } = {}) {
   try {
-    const normalized = mapAccessCode(accessCode);
+    const normalized = resolveCounsellorScope({ accessCode, collegeCode });
+    if (normalized?.error) {
+      return { success: false, error: normalized.error };
+    }
     const rawLoginId = String(loginId || "").trim();
     const byEmail = rawLoginId.includes("@");
 
@@ -747,7 +784,7 @@ export async function loginCounsellor(loginId, counsellorPassword, accessCode) {
     });
 
     if (!filtered.length) {
-      return { success: false, error: "AISHE/UDISE details do not match our records" };
+      return { success: false, error: "College code does not match our records" };
     }
 
     if (filtered.length > 1) {

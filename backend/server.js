@@ -991,13 +991,14 @@ app.post("/api/guardian/:studentId", (req, res) => {
 
 app.post("/api/counsellor/register", async (req, res) => {
   try {
-    const { counsellor_email, counsellor_password, crr_number, organization, access_code, aishe_code, udise_code } = req.body || {};
+    const { counsellor_email, counsellor_password, crr_number, organization, college_code, access_code, aishe_code, udise_code } = req.body || {};
     const resolvedCode = String(access_code || aishe_code || udise_code || "").trim();
+    const resolvedCollegeCode = String(college_code || "").trim().toUpperCase();
     if (!counsellor_email || !counsellor_password || !crr_number) {
       return res.status(400).json({ error: "counsellor_email, counsellor_password, and crr_number are required" });
     }
-    if (!resolvedCode) {
-      return res.status(400).json({ error: "access_code is required" });
+    if (!resolvedCollegeCode && !resolvedCode) {
+      return res.status(400).json({ error: "college_code is required" });
     }
 
     const result = await registerCounsellor(
@@ -1005,7 +1006,10 @@ app.post("/api/counsellor/register", async (req, res) => {
       String(counsellor_password),
       String(crr_number).trim(),
       organization ? String(organization).trim() : null,
-      resolvedCode
+      {
+        collegeCode: resolvedCollegeCode,
+        accessCode: resolvedCode
+      }
     );
     if (!result.success) return res.status(400).json({ error: result.error });
     res.json({ success: true });
@@ -1017,18 +1021,22 @@ app.post("/api/counsellor/register", async (req, res) => {
 
 app.post("/api/counsellor/login", async (req, res) => {
   try {
-    const { login_id, counsellor_password, access_code, aishe_code, udise_code } = req.body || {};
+    const { login_id, counsellor_password, college_code, access_code, aishe_code, udise_code } = req.body || {};
     const resolvedCode = String(access_code || aishe_code || udise_code || "").trim();
+    const resolvedCollegeCode = String(college_code || "").trim().toUpperCase();
     if (!login_id || !counsellor_password) {
       return res.status(400).json({ error: "login_id and counsellor_password are required" });
     }
-    if (!resolvedCode) {
-      return res.status(400).json({ error: "access_code is required" });
+    if (!resolvedCollegeCode && !resolvedCode) {
+      return res.status(400).json({ error: "college_code is required" });
     }
     const result = await loginCounsellor(
       String(login_id).trim(),
       String(counsellor_password),
-      resolvedCode
+      {
+        collegeCode: resolvedCollegeCode,
+        accessCode: resolvedCode
+      }
     );
     if (!result.success) return res.status(401).json({ error: result.error });
     res.json({ success: true, counsellor: result.counsellor });
