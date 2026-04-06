@@ -728,6 +728,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
     if (requestingSessionId === session.id || reportedSessionIds.has(session.id)) return;
 
     setRequestingSessionId(session.id);
+    setReportedSessionIds(prev => new Set([...prev, session.id]));
     setRequestNotice('');
 
     try {
@@ -742,9 +743,13 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         requestedByEmail: user.email
       });
       setRequestNotice('Request sent to counsellor successfully.');
-      setReportedSessionIds(prev => new Set([...prev, session.id]));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
+      setReportedSessionIds(prev => {
+        const next = new Set(prev);
+        next.delete(session.id);
+        return next;
+      });
       setRequestNotice(message);
     } finally {
       setRequestingSessionId(null);
@@ -1558,6 +1563,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     if (requestingSessionId === reportableSession.id || reportedSessionIds.has(reportableSession.id)) return;
 
     setRequestingSessionId(reportableSession.id);
+    setReportedSessionIds(prev => new Set([...prev, reportableSession.id]));
     setRequestNotice('');
     try {
       const urgency = reportableSession.summary.emotion === 'CRITICAL' ? 'critical' : 'bad';
@@ -1571,9 +1577,13 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
         requestedByEmail: user.email
       });
       setRequestNotice('Request sent to counsellor successfully.');
-      setReportedSessionIds(prev => new Set([...prev, reportableSession.id]));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
+      setReportedSessionIds(prev => {
+        const next = new Set(prev);
+        next.delete(reportableSession.id);
+        return next;
+      });
       setRequestNotice(message);
     } finally {
       setRequestingSessionId(null);
