@@ -1759,6 +1759,38 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   const [replicaStatusNote, setReplicaStatusNote] = useState('');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const deletedSessionsStorageKey = `care_deleted_sessions_${user.id}`;
+
+  useEffect(() => {
+    try {
+      const savedDeleted = localStorage.getItem(deletedSessionsStorageKey);
+      if (!savedDeleted) {
+        setDeletedSessionIds([]);
+        return;
+      }
+
+      const parsed = JSON.parse(savedDeleted);
+      if (Array.isArray(parsed)) {
+        const normalized = parsed
+          .map((item) => String(item || '').trim())
+          .filter(Boolean);
+        setDeletedSessionIds(normalized);
+        return;
+      }
+
+      setDeletedSessionIds([]);
+    } catch {
+      setDeletedSessionIds([]);
+    }
+  }, [deletedSessionsStorageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(deletedSessionsStorageKey, JSON.stringify(deletedSessionIds));
+    } catch {
+      // Ignore local storage errors to avoid blocking dashboard usage.
+    }
+  }, [deletedSessionIds, deletedSessionsStorageKey]);
 
   useEffect(() => {
     let isActive = true;
@@ -1768,12 +1800,10 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         const stored = await gemini.fetchSessions(user.id);
         if (!isActive) return;
         setSessions(Array.isArray(stored) ? stored : []);
-        setDeletedSessionIds([]);
       } catch (e) {
         console.error("Session load error:", e);
         if (isActive) {
           setSessions([]);
-          setDeletedSessionIds([]);
         }
       }
     };
@@ -1835,6 +1865,8 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   };
 
   const handleDeleteSession = (sessionId: string) => {
+    const confirmed = window.confirm('Are you sure you want to delete this conversation from your list?');
+    if (!confirmed) return;
     setDeletedSessionIds((prev) => (prev.includes(sessionId) ? prev : [sessionId, ...prev]));
   };
 
