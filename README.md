@@ -130,10 +130,33 @@ Blockchain proof (optional but recommended):
 
 The frontend now stores each session in two places during active chat flow:
 - Device-local replica: browser storage on that laptop (persistent local copy)
-- Browser IPFS node replica: Helia + IndexedDB blockstore on that laptop (when browser networking allows)
+- Local laptop IPFS node replica: app tries local Kubo daemon first (`http://127.0.0.1:5001/api/v0` by default)
+- Browser IPFS node replica fallback: Helia + IndexedDB blockstore (when Kubo is not running)
 - Remote pinned replica: backend pinning flow (Pinata) for shared availability
 
 This gives each participating laptop its own local data replica and attempts local IPFS-node behavior, while still keeping a remote pinned copy.
+
+### Do users need external download?
+
+- If users only open the web app in browser: no external download is required, but this is not full always-on IPFS node behavior.
+- If users must act as real local IPFS peers: yes, each laptop should run Kubo (external install) or use a packaged desktop app that bundles a node.
+
+### Companion Node Setup Per Laptop (Recommended)
+
+1. Install Kubo once: https://docs.ipfs.tech/install/command-line/
+2. From repo root, run:
+
+```powershell
+./start-ipfs-companion.ps1
+```
+
+3. Keep that terminal open while the user chats.
+
+Optional custom frontend origin allowlist:
+
+```powershell
+./start-ipfs-companion.ps1 -AllowedOrigins @('http://localhost:5173','https://your-frontend-domain')
+```
 
 Important practical limits for browsers:
 - Browser IPFS peers are not always reachable like always-on server nodes.

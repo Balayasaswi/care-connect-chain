@@ -29,6 +29,7 @@ type ReplicaIndexEntry = {
 
 const REPLICA_INDEX_KEY = 'care-connect:replica-index:v1';
 const HELIA_BLOCKSTORE_NAME = 'care-connect-helia-blockstore';
+const LOCAL_KUBO_API_BASE = String(import.meta.env.VITE_LOCAL_IPFS_API_BASE || 'http://127.0.0.1:5001/api/v0').trim().replace(/\/$/, '');
 
 type HeliaNode = unknown;
 type UnixFsAddApi = {
@@ -63,6 +64,49 @@ function upsertReplicaIndex(entry: ReplicaIndexEntry) {
   const current = readReplicaIndex();
   const filtered = current.filter((item) => item.storageKey !== entry.storageKey);
   writeReplicaIndex([entry, ...filtered].slice(0, 200));
+}
+
+function parseKuboAddResponse(rawText: string): string | null {
+  const lines = String(rawText || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const parsed = JSON.parse(lines[i]);
+      if (parsed?.Hash) {
+        return String(parsed.Hash);
+      }
+    } catch {
+      // ignore malformed lines
+    }
+  }
+
+  return null;
+}
+
+async function addToLocalKubo(envelope: unknown): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+
+  const formData = new FormData();
+  formData.append('file', new Blob([JSON.stringify(envelope)], { type: 'application/json' }), 'session.json');
+
+  const endpoint = new URL(`${LOCAL_KUBO_API_BASE}/add`);
+  endpoint.searchParams.set('pin', 'true');
+  endpoint.searchParams.set('cid-version', '1');
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const rawText = await response.text();
+  return parseKuboAddResponse(rawText);
 }
 
 async function getHeliaNode(): Promise<HeliaNode | null> {
@@ -109,19 +153,32 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
   let error: string | undefined;
 
   try {
-    const helia = await getHeliaNode();
-    if (helia) {
-      // @ts-ignore Runtime dependency installed in frontend package.
-      const unixfsModule = await import('@helia/unixfs');
-      const fs = unixfsModule.unixfs(helia) as UnixFsAddApi;
-      const bytes = new TextEncoder().encode(JSON.stringify(envelope));
-      const cid = await fs.addBytes(bytes);
-      localCid = typeof cid === 'string' ? cid : cid.toString();
+    const kuboCid = await addToLocalKubo(envelope);
+    if (kuboCid) {
+      localCid = kuboCid;
       status = 'ipfs+device';
     }
-  } catch (heliaError) {
-    error = heliaError instanceof Error ? heliaError.message : 'Unknown local IPFS error';
-    status = 'device-only';
+  } catch (kuboError) {
+    error = kuboError instanceof Error ? kuboError.message : 'Unknown local Kubo error';
+  }
+
+  if (!localCid) {
+    try {
+      const helia = await getHeliaNode();
+      if (helia) {
+        // @ts-ignore Runtime dependency installed in frontend package.
+        const unixfsModule = await import('@helia/unixfs');
+        const fs = unixfsModule.unixfs(helia) as UnixFsAddApi;
+        const bytes = new TextEncoder().encode(JSON.stringify(envelope));
+        const cid = await fs.addBytes(bytes);
+        localCid = typeof cid === 'string' ? cid : cid.toString();
+        status = 'ipfs+device';
+      }
+    } catch (heliaError) {
+      const heliaMessage = heliaError instanceof Error ? heliaError.message : 'Unknown local IPFS error';
+      error = error ? `${error}; ${heliaMessage}` : heliaMessage;
+      status = 'device-only';
+    }
   }
 
   upsertReplicaIndex({
