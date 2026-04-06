@@ -711,7 +711,7 @@ function resolveCounsellorScope({ accessCode, collegeCode } = {}) {
     const aisheCode = String(institution.aishe_code || "").trim() || null;
     const udiseCode = String(institution.udise_code || "").trim() || null;
     if (!aisheCode && !udiseCode) {
-      return { error: "Institution does not have AISHE/UDISE scope configured" };
+      return { error: "Institution scope is not configured" };
     }
 
     return { aisheCode, udiseCode };

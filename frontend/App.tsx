@@ -152,7 +152,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
         if (mode === 'register') {
           if (!institutionEmail) throw new Error('Institution official email is required.');
           if (!accessCode.trim()) {
-            throw new Error('Provide AISHE or UDISE code.');
+            throw new Error('Provide College Verification Code.');
           }
           if (institutionPassword !== institutionConfirmPassword) {
             throw new Error('Password and confirm password do not match.');
@@ -366,10 +366,10 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
                       placeholder="State University" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">AISHE/UDISE Code</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Verification Code</label>
                     <input type="text" value={accessCode} onChange={(e) => setAccessCode(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                      placeholder="AISHE12345 or UDISE67890" required />
+                      placeholder="Enter institution verification code" required />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Institution Official Email</label>
