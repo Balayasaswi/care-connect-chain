@@ -680,28 +680,19 @@ export function exportCounsellorsCsv() {
   fs.mkdirSync(exportsDir, { recursive: true });
   const rows = db
     .prepare(
-      'SELECT counsellor_email, crr_number, college_code, aishe_code, udise_code, organization, created_at FROM counsellors_global ORDER BY created_at DESC',
+      'SELECT counsellor_email, crr_number, aishe_code, udise_code, organization, created_at FROM counsellors_global ORDER BY created_at DESC',
     )
     .all();
   const header = [
     'counsellor_email',
     'crr_number',
-    'college_code',
     'aishe_code',
     'udise_code',
     'organization',
     'created_at',
   ].join(',');
   const lines = rows.map((r) =>
-    [
-      r.counsellor_email,
-      r.crr_number,
-      r.college_code,
-      r.aishe_code,
-      r.udise_code,
-      r.organization,
-      r.created_at,
-    ]
+    [r.counsellor_email, r.crr_number, r.aishe_code, r.udise_code, r.organization, r.created_at]
       .map(csvEscape)
       .join(','),
   );
