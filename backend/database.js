@@ -83,10 +83,33 @@ function initDatabase() {
       counsellor_password TEXT NOT NULL,
       crr_number TEXT,
       organization TEXT,
+      college_code TEXT,
       aishe_code TEXT,
       udise_code TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
+  `);
+
+  const counsellorGlobalColumns = db.prepare("PRAGMA table_info(counsellors_global)").all().map((c) => c.name);
+  if (!counsellorGlobalColumns.includes("college_code")) {
+    db.exec("ALTER TABLE counsellors_global ADD COLUMN college_code TEXT");
+  }
+  db.exec(`
+    UPDATE counsellors_global
+    SET college_code = (
+      SELECT ig.college_code
+      FROM institutions_global ig
+      WHERE (
+        TRIM(COALESCE(counsellors_global.aishe_code, '')) <> ''
+        AND UPPER(COALESCE(ig.aishe_code, '')) = UPPER(COALESCE(counsellors_global.aishe_code, ''))
+      )
+      OR (
+        TRIM(COALESCE(counsellors_global.udise_code, '')) <> ''
+        AND UPPER(COALESCE(ig.udise_code, '')) = UPPER(COALESCE(counsellors_global.udise_code, ''))
+      )
+      LIMIT 1
+    )
+    WHERE TRIM(COALESCE(college_code, '')) = ''
   `);
 
   // Create institutions table

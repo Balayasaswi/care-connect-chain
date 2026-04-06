@@ -991,13 +991,12 @@ app.post("/api/guardian/:studentId", (req, res) => {
 
 app.post("/api/counsellor/register", async (req, res) => {
   try {
-    const { counsellor_email, counsellor_password, crr_number, organization, college_code, access_code, aishe_code, udise_code } = req.body || {};
-    const resolvedCode = String(access_code || aishe_code || udise_code || "").trim();
+    const { counsellor_email, counsellor_password, crr_number, organization, college_code } = req.body || {};
     const resolvedCollegeCode = String(college_code || "").trim().toUpperCase();
     if (!counsellor_email || !counsellor_password || !crr_number) {
       return res.status(400).json({ error: "counsellor_email, counsellor_password, and crr_number are required" });
     }
-    if (!resolvedCollegeCode && !resolvedCode) {
+    if (!resolvedCollegeCode) {
       return res.status(400).json({ error: "college_code is required" });
     }
 
@@ -1007,8 +1006,7 @@ app.post("/api/counsellor/register", async (req, res) => {
       String(crr_number).trim(),
       organization ? String(organization).trim() : null,
       {
-        collegeCode: resolvedCollegeCode,
-        accessCode: resolvedCode
+        collegeCode: resolvedCollegeCode
       }
     );
     if (!result.success) return res.status(400).json({ error: result.error });
@@ -1021,21 +1019,19 @@ app.post("/api/counsellor/register", async (req, res) => {
 
 app.post("/api/counsellor/login", async (req, res) => {
   try {
-    const { login_id, counsellor_password, college_code, access_code, aishe_code, udise_code } = req.body || {};
-    const resolvedCode = String(access_code || aishe_code || udise_code || "").trim();
+    const { login_id, counsellor_password, college_code } = req.body || {};
     const resolvedCollegeCode = String(college_code || "").trim().toUpperCase();
     if (!login_id || !counsellor_password) {
       return res.status(400).json({ error: "login_id and counsellor_password are required" });
     }
-    if (!resolvedCollegeCode && !resolvedCode) {
+    if (!resolvedCollegeCode) {
       return res.status(400).json({ error: "college_code is required" });
     }
     const result = await loginCounsellor(
       String(login_id).trim(),
       String(counsellor_password),
       {
-        collegeCode: resolvedCollegeCode,
-        accessCode: resolvedCode
+        collegeCode: resolvedCollegeCode
       }
     );
     if (!result.success) return res.status(401).json({ error: result.error });
@@ -1058,7 +1054,7 @@ app.get("/api/counsellor/students", (req, res) => {
       return res.status(404).json({ error: "Counsellor not found" });
     }
 
-    const students = getUsersByCounsellorInstitution(counsellor.aishe_code, counsellor.udise_code);
+    const students = getUsersByCounsellorInstitution(counsellor.college_code);
     res.json({ students });
   } catch (error) {
     console.error("Counsellor students error:", error);
@@ -1078,7 +1074,7 @@ app.get("/api/counsellor/summaries", async (req, res) => {
       return res.status(404).json({ error: "Counsellor not found" });
     }
 
-    const linkedStudents = getUsersByCounsellorInstitution(counsellor.aishe_code, counsellor.udise_code);
+    const linkedStudents = getUsersByCounsellorInstitution(counsellor.college_code);
     if (!linkedStudents.length) return res.json({ summaries: [] });
     const allowedStudentIds = new Set(linkedStudents.map((student) => String(student.id)));
 

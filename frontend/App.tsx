@@ -34,6 +34,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
   const [institutionConfirmPassword, setInstitutionConfirmPassword] = useState('');
   const [institutionName, setInstitutionName] = useState('');
   const [accessCode, setAccessCode] = useState('');
+  const [counsellorCollegeCode, setCounsellorCollegeCode] = useState('');
   const [studentCollegeCode, setStudentCollegeCode] = useState('');
   const [institutionCollegeCode, setInstitutionCollegeCode] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState<{ collegeCode: string } | null>(null);
@@ -107,8 +108,8 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
         });
       } else if (role === 'counsellor') {
         if (counsellorPassword.length < 6) throw new Error('Enter a 6+ character password.');
-        if (!accessCode.trim()) {
-          throw new Error('Provide College Code.');
+        if (!counsellorCollegeCode.trim()) {
+          throw new Error('Provide College ID.');
         }
 
         if (mode === 'register') {
@@ -122,7 +123,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
             counsellor_password: counsellorPassword,
             crr_number: crrNumber.trim(),
             organization: organization.trim() || undefined,
-            college_code: accessCode.trim().toUpperCase() || undefined
+            college_code: counsellorCollegeCode.trim().toUpperCase() || undefined
           });
           onLogin({
             id: counsellorEmail.toLowerCase().trim(),
@@ -136,7 +137,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
           const res = await postJson(`${API_BASE_URL}/api/counsellor/login`, {
             login_id: counsellorLoginId.trim(),
             counsellor_password: counsellorPassword,
-            college_code: accessCode.trim().toUpperCase() || undefined
+            college_code: counsellorCollegeCode.trim().toUpperCase() || undefined
           });
           onLogin({
             id: (res.counsellor?.counsellor_email || counsellorLoginId).toLowerCase().trim(),
@@ -305,7 +306,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Code</label>
-                    <input type="text" value={accessCode} onChange={(e) => setAccessCode(e.target.value)}
+                    <input type="text" value={counsellorCollegeCode} onChange={(e) => setCounsellorCollegeCode(e.target.value.toUpperCase())}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                       placeholder="CC-ABC123" required />
                   </div>
@@ -347,7 +348,7 @@ const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
               {mode !== 'register' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">College Code</label>
-                  <input type="text" value={accessCode} onChange={(e) => setAccessCode(e.target.value)}
+                  <input type="text" value={counsellorCollegeCode} onChange={(e) => setCounsellorCollegeCode(e.target.value.toUpperCase())}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                     placeholder="CC-ABC123" required />
                 </div>

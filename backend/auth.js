@@ -501,57 +501,10 @@ export function getUsersByInstitutionCollegeCode(collegeCode) {
     .all(normalized);
 }
 
-function getInstitutionCollegeCodeByCounsellorScope(aisheCode, udiseCode) {
-  const normalizedAishe = String(aisheCode || "").trim().toUpperCase();
-  const normalizedUdise = String(udiseCode || "").trim().toUpperCase();
-
-  if (normalizedAishe) {
-    const byAishe = db
-      .prepare("SELECT college_code FROM institutions_global WHERE UPPER(COALESCE(aishe_code, '')) = ? LIMIT 1")
-      .get(normalizedAishe);
-    if (byAishe?.college_code) {
-      return String(byAishe.college_code).trim().toUpperCase();
-    }
-  }
-
-  if (normalizedUdise) {
-    const byUdise = db
-      .prepare("SELECT college_code FROM institutions_global WHERE UPPER(COALESCE(udise_code, '')) = ? LIMIT 1")
-      .get(normalizedUdise);
-    if (byUdise?.college_code) {
-      return String(byUdise.college_code).trim().toUpperCase();
-    }
-  }
-
-  return null;
-}
-
-export function getUsersByCounsellorInstitution(aisheCode, udiseCode) {
-  const normalizedAishe = String(aisheCode || "").trim().toUpperCase();
-  const normalizedUdise = String(udiseCode || "").trim().toUpperCase();
-
-  const byId = new Map();
-
-  const collegeCode = getInstitutionCollegeCodeByCounsellorScope(normalizedAishe, normalizedUdise);
-  if (collegeCode) {
-    const scopedByCollege = getUsersByInstitutionCollegeCode(collegeCode);
-    for (const student of scopedByCollege) {
-      byId.set(String(student.id), student);
-    }
-  }
-
-  const directCodes = [normalizedAishe, normalizedUdise].filter(Boolean);
-  if (directCodes.length) {
-    const placeholders = directCodes.map(() => "?").join(", ");
-    const scopedByAccessCode = db
-      .prepare(`SELECT id, username, email FROM users WHERE UPPER(COALESCE(institution_access_code, '')) IN (${placeholders})`)
-      .all(...directCodes);
-    for (const student of scopedByAccessCode) {
-      byId.set(String(student.id), student);
-    }
-  }
-
-  return Array.from(byId.values());
+export function getUsersByCounsellorInstitution(collegeCode) {
+  const normalizedCollegeCode = String(collegeCode || "").trim().toUpperCase();
+  if (!normalizedCollegeCode) return [];
+  return getUsersByInstitutionCollegeCode(normalizedCollegeCode);
 }
 
 // Add or update guardian for a student
@@ -666,11 +619,11 @@ export function getGuardiansByEmail(guardianEmail) {
 export function exportCounsellorsCsv() {
   fs.mkdirSync(exportsDir, { recursive: true });
   const rows = db.prepare(
-    "SELECT counsellor_email, crr_number, aishe_code, udise_code, organization, created_at FROM counsellors_global ORDER BY created_at DESC"
+    "SELECT counsellor_email, crr_number, college_code, aishe_code, udise_code, organization, created_at FROM counsellors_global ORDER BY created_at DESC"
   ).all();
-  const header = ["counsellor_email", "crr_number", "aishe_code", "udise_code", "organization", "created_at"].join(",");
+  const header = ["counsellor_email", "crr_number", "college_code", "aishe_code", "udise_code", "organization", "created_at"].join(",");
   const lines = rows.map((r) =>
-    [r.counsellor_email, r.crr_number, r.aishe_code, r.udise_code, r.organization, r.created_at].map(csvEscape).join(",")
+    [r.counsellor_email, r.crr_number, r.college_code, r.aishe_code, r.udise_code, r.organization, r.created_at].map(csvEscape).join(",")
   );
   fs.writeFileSync(counsellorsCsvPath, [header, ...lines].join("\n"), "utf-8");
 }
@@ -700,7 +653,7 @@ function getInstitutionScopeByCollegeCode(collegeCode) {
   ).get(normalizedCollegeCode);
 }
 
-function resolveCounsellorScope({ accessCode, collegeCode } = {}) {
+function resolveCounsellorScope({ collegeCode } = {}) {
   const normalizedCollegeCode = String(collegeCode || "").trim().toUpperCase();
   if (normalizedCollegeCode) {
     const institution = getInstitutionScopeByCollegeCode(normalizedCollegeCode);
@@ -714,15 +667,15 @@ function resolveCounsellorScope({ accessCode, collegeCode } = {}) {
       return { error: "Institution scope is not configured" };
     }
 
-    return { aisheCode, udiseCode };
+    return { collegeCode: normalizedCollegeCode, aisheCode, udiseCode };
   }
 
-  return mapAccessCode(accessCode);
+  return { error: "college_code is required" };
 }
 
-export async function registerCounsellor(counsellorEmail, counsellorPassword, crrNumber, organization, { accessCode, collegeCode } = {}) {
+export async function registerCounsellor(counsellorEmail, counsellorPassword, crrNumber, organization, { collegeCode } = {}) {
   try {
-    const normalized = resolveCounsellorScope({ accessCode, collegeCode });
+    const normalized = resolveCounsellorScope({ collegeCode });
     if (normalized?.error) {
       return { success: false, error: normalized.error };
     }
@@ -743,16 +696,25 @@ export async function registerCounsellor(counsellorEmail, counsellorPassword, cr
 
     const hashedPassword = await hashPassword(counsellorPassword);
     const stmt = db.prepare(`
-      INSERT INTO counsellors_global (counsellor_email, counsellor_password, crr_number, organization, aishe_code, udise_code)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO counsellors_global (counsellor_email, counsellor_password, crr_number, organization, college_code, aishe_code, udise_code)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(counsellor_email) DO UPDATE SET
         counsellor_password = excluded.counsellor_password,
         crr_number = excluded.crr_number,
         organization = excluded.organization,
+        college_code = excluded.college_code,
         aishe_code = excluded.aishe_code,
         udise_code = excluded.udise_code
     `);
-    stmt.run(counsellorEmail, hashedPassword, normalizedCrr || null, organization || null, normalized.aisheCode, normalized.udiseCode);
+    stmt.run(
+      counsellorEmail,
+      hashedPassword,
+      normalizedCrr || null,
+      organization || null,
+      normalized.collegeCode,
+      normalized.aisheCode,
+      normalized.udiseCode
+    );
     try { exportCounsellorsCsv(); } catch (e) { console.warn("Counsellors CSV export failed:", e.message); }
     return { success: true };
   } catch (error) {
@@ -760,9 +722,9 @@ export async function registerCounsellor(counsellorEmail, counsellorPassword, cr
   }
 }
 
-export async function loginCounsellor(loginId, counsellorPassword, { accessCode, collegeCode } = {}) {
+export async function loginCounsellor(loginId, counsellorPassword, { collegeCode } = {}) {
   try {
-    const normalized = resolveCounsellorScope({ accessCode, collegeCode });
+    const normalized = resolveCounsellorScope({ collegeCode });
     if (normalized?.error) {
       return { success: false, error: normalized.error };
     }
@@ -778,9 +740,7 @@ export async function loginCounsellor(loginId, counsellorPassword, { accessCode,
     }
 
     const filtered = records.filter((record) => {
-      const aisheMatches = normalized.aisheCode && String(record.aishe_code || "").trim() === String(normalized.aisheCode).trim();
-      const udiseMatches = normalized.udiseCode && String(record.udise_code || "").trim() === String(normalized.udiseCode).trim();
-      return Boolean(aisheMatches || udiseMatches);
+      return String(record.college_code || "").trim().toUpperCase() === String(normalized.collegeCode || "").trim().toUpperCase();
     });
 
     if (!filtered.length) {
@@ -1078,7 +1038,7 @@ export function listCounsellorRequestsForCounsellor(counsellorEmail) {
     return { success: false, error: "Counsellor not found" };
   }
 
-  const students = getUsersByCounsellorInstitution(counsellor.aishe_code, counsellor.udise_code);
+  const students = getUsersByCounsellorInstitution(counsellor.college_code);
   const studentIds = students.map((student) => String(student.id));
 
   if (!studentIds.length) {
@@ -1153,7 +1113,7 @@ export function createCounsellorSchedule(payload) {
     return { success: false, error: "Counsellor not found" };
   }
 
-  const allowedStudents = getUsersByCounsellorInstitution(counsellor.aishe_code, counsellor.udise_code);
+  const allowedStudents = getUsersByCounsellorInstitution(counsellor.college_code);
   const isAllowed = allowedStudents.some((student) => String(student.id) === studentId);
   if (!isAllowed) {
     return { success: false, error: "Counsellor is not linked to this student" };
