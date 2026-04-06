@@ -126,6 +126,48 @@ Blockchain proof (optional but recommended):
 - If local override files exist from demo scripts (`backend/.env.local`, `frontend/.env.local`), do not commit them.
 - Frontend defaults to same-origin API in production, so `VITE_API_BASE_URL` is optional for single-service deployment.
 
+### Free Blockchain On Railway (Polygon Amoy)
+
+Use this when you want public internet demo with no real-money gas.
+
+1. Create free RPC endpoint (Alchemy/Infura/Ankr) for Polygon Amoy.
+2. Create a fresh test wallet (do not reuse your personal wallet).
+3. Request Amoy faucet tokens to that wallet address.
+4. In `backend`, install deps if needed:
+
+```powershell
+cd backend
+npm install
+```
+
+5. Set local env for deploy command (PowerShell example):
+
+```powershell
+$env:BLOCKCHAIN_RPC_URL="https://polygon-amoy.g.alchemy.com/v2/YOUR_KEY"
+$env:BLOCKCHAIN_PRIVATE_KEY="0xYOUR_TEST_WALLET_PRIVATE_KEY"
+$env:BLOCKCHAIN_CHAIN_ID="80002"
+```
+
+6. Deploy contract:
+
+```powershell
+npm run deploy:amoy
+```
+
+7. Copy printed values into Railway service variables:
+- `BLOCKCHAIN_RPC_URL`
+- `BLOCKCHAIN_PRIVATE_KEY`
+- `CID_REGISTRY_CONTRACT_ADDRESS`
+- `BLOCKCHAIN_CHAIN_ID=80002`
+- `BLOCKCHAIN_OPTIONAL=true`
+
+8. Redeploy Railway service.
+
+Notes:
+- This is free for testing because Amoy uses test tokens.
+- Mainnet deployment always needs real gas fees.
+- Use `backend/.env.amoy.example` as template for local setup.
+
 ## Distributed IPFS Behavior (Per Laptop)
 
 The frontend now stores each session in two places during active chat flow:
