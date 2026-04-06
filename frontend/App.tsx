@@ -1926,9 +1926,6 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
                 <p className="text-sm font-semibold text-indigo-900">
                   Counsellor session scheduled at {when}
                 </p>
-                <p className="text-xs text-indigo-800 uppercase font-bold tracking-widest mt-1">
-                  Priority: {String(item.urgency || 'bad').toUpperCase()}
-                </p>
                 {item.notes && <p className="text-xs text-slate-600 mt-1">{item.notes}</p>}
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
