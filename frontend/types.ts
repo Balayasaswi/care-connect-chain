@@ -28,6 +28,7 @@ export interface LocalReplicaInfo {
   localCid?: string;
   storedAt: string;
   status: 'ipfs+device' | 'device-only';
+  mode?: 'kubo' | 'helia' | 'device-only';
   error?: string;
 }
 

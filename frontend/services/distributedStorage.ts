@@ -24,6 +24,7 @@ type ReplicaIndexEntry = {
   storageKey: string;
   localCid?: string;
   status: LocalReplicaInfo['status'];
+  mode?: NonNullable<LocalReplicaInfo['mode']>;
   storedAt: string;
 };
 
@@ -150,6 +151,7 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
 
   let localCid: string | undefined;
   let status: LocalReplicaInfo['status'] = 'device-only';
+  let mode: NonNullable<LocalReplicaInfo['mode']> = 'device-only';
   let error: string | undefined;
 
   try {
@@ -157,6 +159,7 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
     if (kuboCid) {
       localCid = kuboCid;
       status = 'ipfs+device';
+      mode = 'kubo';
     }
   } catch (kuboError) {
     error = kuboError instanceof Error ? kuboError.message : 'Unknown local Kubo error';
@@ -173,6 +176,7 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
         const cid = await fs.addBytes(bytes);
         localCid = typeof cid === 'string' ? cid : cid.toString();
         status = 'ipfs+device';
+        mode = 'helia';
       }
     } catch (heliaError) {
       const heliaMessage = heliaError instanceof Error ? heliaError.message : 'Unknown local IPFS error';
@@ -187,6 +191,7 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
     storageKey,
     localCid,
     status,
+    mode,
     storedAt
   });
 
@@ -195,6 +200,7 @@ export async function storeSessionReplicaOnDevice(payload: SessionReplicaPayload
     localCid,
     storedAt,
     status,
+    mode,
     error
   };
 }

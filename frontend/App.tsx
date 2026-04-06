@@ -1842,6 +1842,28 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
   );
   const unreadNotificationsCount = notifications.filter((item) => !item.student_read_at).length;
 
+  const replicaMode = activeSessionReplica?.mode || 'device-only';
+  const replicaBadge = (() => {
+    if (replicaMode === 'kubo') {
+      return {
+        label: 'Local Kubo Connected',
+        className: 'bg-emerald-50 border-emerald-100 text-emerald-700'
+      };
+    }
+
+    if (replicaMode === 'helia') {
+      return {
+        label: 'Helia Fallback Active',
+        className: 'bg-amber-50 border-amber-100 text-amber-700'
+      };
+    }
+
+    return {
+      label: 'Device Only Mode',
+      className: 'bg-slate-100 border-slate-200 text-slate-600'
+    };
+  })();
+
   const handleMarkNotificationRead = async (scheduleId: string) => {
     setReadingNotificationId(scheduleId);
     try {
@@ -1959,10 +1981,14 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
         pinnedAt: nowIso
       });
       setActiveSessionReplica(localReplica);
-      if (localReplica.status === 'ipfs+device') {
-        setReplicaStatusNote('Distributed mode: one copy is on this device IPFS node and one copy is pinned remotely.');
+      if (localReplica.mode === 'kubo') {
+        setReplicaStatusNote('Distributed mode active: this laptop Kubo node stored a local IPFS copy and Pinata stored a remote copy.');
+      } else if (localReplica.mode === 'helia') {
+        setReplicaStatusNote('Helia fallback active: browser IPFS stored a local copy and Pinata stored a remote copy.');
+      } else if (localReplica.status === 'ipfs+device') {
+        setReplicaStatusNote('Distributed mode active: this device stored an IPFS copy and Pinata stored a remote copy.');
       } else {
-        setReplicaStatusNote('Device copy saved locally. Browser IPFS node was limited for this checkpoint, remote pinning still continues.');
+        setReplicaStatusNote('Device copy saved locally. IPFS node was limited for this checkpoint, remote pinning still continues.');
       }
     } catch (localReplicaError) {
       console.error('Local replica error:', localReplicaError);
@@ -2028,10 +2054,14 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
           });
           localReplica = replica;
           setActiveSessionReplica(replica);
-          if (replica.status === 'ipfs+device') {
-            setReplicaStatusNote('Distributed mode: one copy is on this device IPFS node and one copy is pinned remotely.');
+          if (replica.mode === 'kubo') {
+            setReplicaStatusNote('Distributed mode active: this laptop Kubo node stored a local IPFS copy and Pinata stored a remote copy.');
+          } else if (replica.mode === 'helia') {
+            setReplicaStatusNote('Helia fallback active: browser IPFS stored a local copy and Pinata stored a remote copy.');
+          } else if (replica.status === 'ipfs+device') {
+            setReplicaStatusNote('Distributed mode active: this device stored an IPFS copy and Pinata stored a remote copy.');
           } else {
-            setReplicaStatusNote('Device copy saved locally. Browser IPFS node was limited, remote pinning still continues.');
+            setReplicaStatusNote('Device copy saved locally. IPFS node was limited, remote pinning still continues.');
           }
         } catch (replicaError) {
           console.error('Session replica error:', replicaError);
@@ -2133,6 +2163,10 @@ const Dashboard: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLog
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
             <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Server-secured</span>
             <span className="text-xs text-emerald-700 font-medium">No wallet required</span>
+          </div>
+          <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border ${replicaBadge.className}`}>
+            <span className="text-[10px] font-bold uppercase tracking-widest">IPFS Mode</span>
+            <span className="text-xs font-medium">{replicaBadge.label}</span>
           </div>
           <div className="relative" ref={profileMenuRef}>
             <button
