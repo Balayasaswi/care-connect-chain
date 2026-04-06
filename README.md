@@ -83,6 +83,49 @@ Configure blockchain and service endpoints as needed.
 ./stop-demo-network.ps1
 ```
 
+## Railway Deployment (Single Service)
+
+This repository is configured for one Railway service that:
+- Builds `frontend/dist`
+- Starts `backend/server.js`
+- Serves the frontend from the backend process
+
+Files used by Railway:
+- `railway.json` for build command
+- `Procfile` for start command
+
+### Steps
+
+1. Push this repository to GitHub.
+2. In Railway, create a new project from the GitHub repo.
+3. Add environment variables in Railway service settings:
+
+Required:
+- `GROQ_API_KEY`
+- `HOST=0.0.0.0`
+- `PORT` (Railway can inject this automatically)
+
+IPFS for cloud deployment:
+- `IPFS_PROVIDER=pinata`
+- `PINATA_JWT` (or `PINATA_API_KEY` + `PINATA_API_SECRET`)
+- Optional: `IPFS_GATEWAY_BASE=https://gateway.pinata.cloud/ipfs`
+- Optional: `IPFS_READ_GATEWAYS=https://gateway.pinata.cloud/ipfs,https://ipfs.io/ipfs`
+
+Blockchain proof (optional but recommended):
+- `BLOCKCHAIN_RPC_URL` (public testnet RPC)
+- `BLOCKCHAIN_PRIVATE_KEY`
+- `CID_REGISTRY_CONTRACT_ADDRESS`
+- `BLOCKCHAIN_CHAIN_ID`
+- `BLOCKCHAIN_OPTIONAL=true`
+
+4. Deploy. Railway will run the configured build and start commands automatically.
+
+### Important Notes
+
+- Do not use local-only values (for example `127.0.0.1:8545` or local IPFS daemon URLs) in Railway.
+- If local override files exist from demo scripts (`backend/.env.local`, `frontend/.env.local`), do not commit them.
+- Frontend defaults to same-origin API in production, so `VITE_API_BASE_URL` is optional for single-service deployment.
+
 ## Small Local Blockchain
 
 If you want a tiny private chain for testing or demos, use the bundled Besu network:
