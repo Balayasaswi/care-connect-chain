@@ -106,23 +106,6 @@ function initDatabase() {
   if (!counsellorGlobalColumns.includes('college_code')) {
     db.exec('ALTER TABLE counsellors_global ADD COLUMN college_code TEXT');
   }
-  db.exec(`
-    UPDATE counsellors_global
-    SET college_code = (
-      SELECT ig.college_code
-      FROM institutions_global ig
-      WHERE (
-        TRIM(COALESCE(counsellors_global.aishe_code, '')) <> ''
-        AND UPPER(COALESCE(ig.aishe_code, '')) = UPPER(COALESCE(counsellors_global.aishe_code, ''))
-      )
-      OR (
-        TRIM(COALESCE(counsellors_global.udise_code, '')) <> ''
-        AND UPPER(COALESCE(ig.udise_code, '')) = UPPER(COALESCE(counsellors_global.udise_code, ''))
-      )
-      LIMIT 1
-    )
-    WHERE TRIM(COALESCE(college_code, '')) = ''
-  `);
 
   // Create institutions table
   db.exec(`
@@ -174,6 +157,24 @@ function initDatabase() {
   db.exec(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_institutions_global_college_code ON institutions_global(college_code)',
   );
+
+  db.exec(`
+    UPDATE counsellors_global
+    SET college_code = (
+      SELECT ig.college_code
+      FROM institutions_global ig
+      WHERE (
+        TRIM(COALESCE(counsellors_global.aishe_code, '')) <> ''
+        AND UPPER(COALESCE(ig.aishe_code, '')) = UPPER(COALESCE(counsellors_global.aishe_code, ''))
+      )
+      OR (
+        TRIM(COALESCE(counsellors_global.udise_code, '')) <> ''
+        AND UPPER(COALESCE(ig.udise_code, '')) = UPPER(COALESCE(counsellors_global.udise_code, ''))
+      )
+      LIMIT 1
+    )
+    WHERE TRIM(COALESCE(college_code, '')) = ''
+  `);
 
   // Create care network links (student-centered graph of connected actors)
   db.exec(`
