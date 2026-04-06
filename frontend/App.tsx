@@ -10,6 +10,26 @@ import { Shield, Plus, User as UserIcon, LogOut, ChevronLeft, Lock, Users, Histo
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
+const readReportedSessionIds = (storageKey: string): Set<string> => {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.map((value) => String(value)).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+};
+
+const writeReportedSessionIds = (storageKey: string, sessionIds: Set<string>) => {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(Array.from(sessionIds)));
+  } catch {
+    // Ignore quota/storage failures; UI state still works for this session.
+  }
+};
+
 // --- Authentication View ---
 const Login: React.FC<{ onLogin: (u: User) => void }> = ({ onLogin }) => {
   const [role, setRole] = useState<UserRole>('student');
@@ -566,7 +586,8 @@ const SessionSummaryRows: React.FC<{
   sessions: SessionRecord[];
   onReport: (session: SessionRecord) => void;
   reportingSessionId?: string | null;
-}> = ({ sessions, onReport, reportingSessionId }) => {
+  reportedSessionIds?: Set<string>;
+}> = ({ sessions, onReport, reportingSessionId, reportedSessionIds = new Set() }) => {
   const formatDate = (session: SessionRecord) => {
     const raw = session.summary?.start_time_stamp || session.ipfs?.pinnedAt || '';
     const date = new Date(raw);
@@ -599,10 +620,16 @@ const SessionSummaryRows: React.FC<{
                 <button
                   type="button"
                   onClick={() => onReport(session)}
-                  disabled={reportingSessionId === session.id}
-                  className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                  disabled={reportingSessionId === session.id || reportedSessionIds.has(session.id)}
+                  className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg text-white transition-all ${
+                    reportedSessionIds.has(session.id)
+                      ? 'bg-green-600 hover:bg-green-600 cursor-not-allowed pointer-events-none opacity-100'
+                      : reportingSessionId === session.id
+                      ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
+                      : 'bg-amber-600 hover:bg-amber-700'
+                  }`}
                 >
-                  {reportingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
+                  {reportedSessionIds.has(session.id) ? 'Reported' : reportingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
                 </button>
               )}
             </div>
@@ -619,10 +646,20 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
   const [status, setStatus] = useState<'not_found' | 'no_sessions' | 'ready'>('ready');
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
+  const [reportedSessionIds, setReportedSessionIds] = useState<Set<string>>(new Set());
   const [requestNotice, setRequestNotice] = useState('');
   const [view, setView] = useState<'main' | 'notifications'>('main');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const reportedSessionsStorageKey = `care_guardian_reported_sessions_${user.id}`;
+
+  useEffect(() => {
+    setReportedSessionIds(readReportedSessionIds(reportedSessionsStorageKey));
+  }, [reportedSessionsStorageKey]);
+
+  useEffect(() => {
+    writeReportedSessionIds(reportedSessionsStorageKey, reportedSessionIds);
+  }, [reportedSessionsStorageKey, reportedSessionIds]);
 
   useEffect(() => {
     const fetchSummaries = async () => {
@@ -688,6 +725,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
 
   const handleRequestCounsellor = async (session: SessionRecord) => {
     if (!user.studentId) return;
+    if (requestingSessionId === session.id || reportedSessionIds.has(session.id)) return;
 
     setRequestingSessionId(session.id);
     setRequestNotice('');
@@ -704,6 +742,7 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
         requestedByEmail: user.email
       });
       setRequestNotice('Request sent to counsellor successfully.');
+      setReportedSessionIds(prev => new Set([...prev, session.id]));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
       setRequestNotice(message);
@@ -825,10 +864,16 @@ const GuardianDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ use
                         <button
                           type="button"
                           onClick={() => handleRequestCounsellor(session)}
-                          disabled={requestingSessionId === session.id}
-                          className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                          disabled={requestingSessionId === session.id || reportedSessionIds.has(session.id)}
+                          className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg text-white transition-all ${
+                            reportedSessionIds.has(session.id)
+                              ? 'bg-green-600 hover:bg-green-600 cursor-not-allowed pointer-events-none opacity-100'
+                              : requestingSessionId === session.id
+                              ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
+                              : 'bg-amber-600 hover:bg-amber-700'
+                          }`}
                         >
-                          {requestingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
+                          {reportedSessionIds.has(session.id) ? 'Reported' : requestingSessionId === session.id ? 'Reporting...' : 'Report to Counsellor'}
                         </button>
                       )}
                     </div>
@@ -1404,9 +1449,11 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
   const [selectedStudentSessions, setSelectedStudentSessions] = useState<SessionRecord[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [requestingSessionId, setRequestingSessionId] = useState<string | null>(null);
+  const [reportedSessionIds, setReportedSessionIds] = useState<Set<string>>(new Set());
   const [requestNotice, setRequestNotice] = useState('');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const reportedSessionsStorageKey = `care_institution_reported_sessions_${user.id}`;
 
   const normalizedStudentSearch = studentSearch.trim().toLowerCase();
   const filteredStudents = students.filter((student) => {
@@ -1420,6 +1467,14 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
     const emotion = String(session.summary?.emotion || '').toUpperCase();
     return emotion === 'BAD' || emotion === 'CRITICAL';
   });
+
+  useEffect(() => {
+    setReportedSessionIds(readReportedSessionIds(reportedSessionsStorageKey));
+  }, [reportedSessionsStorageKey]);
+
+  useEffect(() => {
+    writeReportedSessionIds(reportedSessionsStorageKey, reportedSessionIds);
+  }, [reportedSessionsStorageKey, reportedSessionIds]);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -1500,6 +1555,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
 
   const handleRequestCounsellor = async () => {
     if (!selectedStudent || !reportableSession) return;
+    if (requestingSessionId === reportableSession.id || reportedSessionIds.has(reportableSession.id)) return;
 
     setRequestingSessionId(reportableSession.id);
     setRequestNotice('');
@@ -1515,6 +1571,7 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
         requestedByEmail: user.email
       });
       setRequestNotice('Request sent to counsellor successfully.');
+      setReportedSessionIds(prev => new Set([...prev, reportableSession.id]));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send counsellor request.';
       setRequestNotice(message);
@@ -1702,10 +1759,16 @@ const InstitutionDashboard: React.FC<{ user: User; onLogout: () => void }> = ({ 
                         <button
                           type="button"
                           onClick={handleRequestCounsellor}
-                          disabled={!reportableSession || requestingSessionId !== null}
-                          className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
+                          disabled={!reportableSession || requestingSessionId !== null || (reportableSession ? reportedSessionIds.has(reportableSession.id) : false)}
+                          className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg text-white transition-all ${
+                            reportableSession && reportedSessionIds.has(reportableSession.id)
+                              ? 'bg-green-600 hover:bg-green-600 cursor-not-allowed pointer-events-none opacity-100'
+                              : requestingSessionId
+                              ? 'bg-amber-600 opacity-60 cursor-wait pointer-events-none'
+                              : 'bg-amber-600 hover:bg-amber-700'
+                          }`}
                         >
-                          {requestingSessionId ? 'Reporting...' : 'Report to Counsellor'}
+                          {reportableSession && reportedSessionIds.has(reportableSession.id) ? 'Reported' : requestingSessionId ? 'Reporting...' : 'Report to Counsellor'}
                         </button>
                       </div>
                       <pre className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed text-sm">
