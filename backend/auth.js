@@ -961,8 +961,26 @@ export async function registerInstitution(
 
 export async function loginInstitution(collegeCode, institutionPassword) {
   try {
-    const stmt = db.prepare('SELECT * FROM institutions_global WHERE college_code = ?');
-    const record = stmt.get(String(collegeCode).trim().toUpperCase());
+    const loginId = String(collegeCode || '').trim();
+    if (!loginId) {
+      return { success: false, error: 'Invalid college code' };
+    }
+
+    const normalizedUpper = loginId.toUpperCase();
+    const normalizedLower = loginId.toLowerCase();
+
+    // Accept multiple identifiers for institution login to avoid confusion between
+    // college code and institution verification code/email.
+    const stmt = db.prepare(
+      `SELECT *
+       FROM institutions_global
+       WHERE UPPER(COALESCE(college_code, '')) = ?
+          OR LOWER(COALESCE(institution_email, '')) = ?
+          OR UPPER(COALESCE(aishe_code, '')) = ?
+          OR UPPER(COALESCE(udise_code, '')) = ?
+       LIMIT 1`,
+    );
+    const record = stmt.get(normalizedUpper, normalizedLower, normalizedUpper, normalizedUpper);
     if (!record) return { success: false, error: 'Invalid college code' };
     const isValid = await verifyPassword(institutionPassword, record.institution_password);
     if (!isValid) return { success: false, error: 'Invalid password' };

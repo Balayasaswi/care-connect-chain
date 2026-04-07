@@ -1549,14 +1549,24 @@ app.post('/api/institution/register', async (req, res) => {
 
 app.post('/api/institution/login', async (req, res) => {
   try {
-    const { college_code, institution_password } = req.body || {};
-    if (!college_code || !institution_password) {
-      return res.status(400).json({ error: 'college_code and institution_password are required' });
+    const {
+      college_code,
+      collegeCode,
+      login_id,
+      institution_email,
+      institution_password,
+      password,
+    } = req.body || {};
+
+    const loginIdentifier = String(
+      college_code || collegeCode || login_id || institution_email || '',
+    ).trim();
+    const resolvedPassword = String(institution_password || password || '');
+
+    if (!loginIdentifier || !resolvedPassword) {
+      return res.status(400).json({ error: 'login identifier and institution_password are required' });
     }
-    const result = await loginInstitution(
-      String(college_code).trim().toUpperCase(),
-      String(institution_password),
-    );
+    const result = await loginInstitution(loginIdentifier, resolvedPassword);
     if (!result.success) return res.status(401).json({ error: result.error });
     res.json({ success: true, institution: result.institution });
   } catch (error) {
