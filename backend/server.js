@@ -45,7 +45,6 @@ import {
   saveSessionArchive,
   getSessionArchivesByStudent,
 } from './auth.js';
-import { extractKeywordsAndEmotion } from './bertNlp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,11 +97,8 @@ function parsePositiveInt(value, fallback) {
 
 const IPFS_FETCH_TIMEOUT_MS = parsePositiveInt(process.env.IPFS_FETCH_TIMEOUT_MS, 2500);
 const IPFS_FETCH_CONCURRENCY = parsePositiveInt(process.env.IPFS_FETCH_CONCURRENCY, 6);
-const BERT_EXTRACTION_TIMEOUT_MS = parsePositiveInt(process.env.BERT_EXTRACTION_TIMEOUT_MS, 7000);
-const BERT_FAILURE_BACKOFF_MS = parsePositiveInt(process.env.BERT_FAILURE_BACKOFF_MS, 600000);
 
 let blockchainClient = null;
-let bertDisabledUntil = 0;
 
 app.use(cors());
 app.use(express.json());
@@ -584,27 +580,6 @@ function buildFallbackSummaryFromHistory(history) {
   }
 
   return 'Session completed with supportive conversation.';
-}
-
-async function runBertExtractionWithTimeout(transcript) {
-  const now = Date.now();
-  if (bertDisabledUntil > now) {
-    throw new Error('BERT extraction is temporarily disabled after recent failures');
-  }
-
-  const extractionPromise = extractKeywordsAndEmotion(transcript, { maxKeywords: 6 });
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(`BERT extraction timed out after ${BERT_EXTRACTION_TIMEOUT_MS}ms`));
-    }, BERT_EXTRACTION_TIMEOUT_MS);
-  });
-
-  try {
-    return await Promise.race([extractionPromise, timeoutPromise]);
-  } catch (error) {
-    bertDisabledUntil = Date.now() + BERT_FAILURE_BACKOFF_MS;
-    throw error;
-  }
 }
 
 // Encryption removed for now; payloads are stored in IPFS as plain JSON.
@@ -1774,11 +1749,9 @@ app.post('/api/summary', async (req, res) => {
       nowIso,
     );
 
-    const transcript = buildTranscriptFromHistory(safeHistory);
-
     let summary = buildFallbackSummaryFromHistory(safeHistory);
-    let groqKeywords = [];
-    let groqEmotion = 'NEUTRAL';
+    let keywords = [];
+    let emotion = 'NEUTRAL';
 
     try {
       const groq = getGroqClient();
@@ -1797,7 +1770,7 @@ app.post('/api/summary', async (req, res) => {
       }
 
       if (Array.isArray(parsed?.keywords)) {
-        groqKeywords = parsed.keywords
+        keywords = parsed.keywords
           .map((keyword) => String(keyword || '').trim().toLowerCase())
           .filter(Boolean)
           .slice(0, 8);
@@ -1807,43 +1780,10 @@ app.post('/api/summary', async (req, res) => {
         .trim()
         .toUpperCase();
       if (['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(candidateEmotion)) {
-        groqEmotion = candidateEmotion;
+        emotion = candidateEmotion;
       }
     } catch (summaryError) {
       console.warn('GROQ summary skipped, using local fallback:', summaryError?.message || summaryError);
-    }
-
-    let keywords = [];
-    let emotion = 'NEUTRAL';
-
-    try {
-      const bertExtraction = await runBertExtractionWithTimeout(transcript);
-      keywords = Array.isArray(bertExtraction.keywords)
-        ? bertExtraction.keywords
-            .map((keyword) => String(keyword || '').trim().toLowerCase())
-            .filter(Boolean)
-        : [];
-
-      const candidateEmotion = String(bertExtraction.emotion || '')
-        .trim()
-        .toUpperCase();
-      if (['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(candidateEmotion)) {
-        emotion = candidateEmotion;
-      }
-    } catch (bertError) {
-      console.warn('BERT extraction failed, using fallback:', bertError?.message || bertError);
-    }
-
-    if (!keywords.length) {
-      keywords = groqKeywords;
-    }
-
-    if (!['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(emotion)) {
-      emotion = groqEmotion;
-    }
-
-    if (!['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(emotion)) {
-      emotion = 'NEUTRAL';
     }
 
     res.json({
