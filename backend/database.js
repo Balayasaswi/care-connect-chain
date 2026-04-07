@@ -1,11 +1,20 @@
 import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'care-connect.db');
+const isRailway =
+  Boolean(process.env.RAILWAY_PROJECT_ID) ||
+  Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+  Boolean(process.env.RAILWAY_SERVICE_ID);
+
+const dbPath =
+  process.env.DB_PATH ||
+  (isRailway ? '/data/care-connect.db' : path.join(__dirname, 'care-connect.db'));
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
 
 // Enable foreign keys

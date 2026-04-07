@@ -139,6 +139,12 @@ Required:
 - `HOST=0.0.0.0`
 - `PORT` (Railway can inject this automatically)
 
+Persistence (required for registration data to survive redeploy/restart):
+
+- Attach a Railway Volume and mount it to `/data`
+- Optional explicit override: `DB_PATH=/data/care-connect.db`
+- Optional explicit CSV path: `EXPORTS_DIR=/data/exports`
+
 IPFS for cloud deployment:
 
 - `IPFS_PROVIDER=pinata`
@@ -182,6 +188,7 @@ When you are ready for real testnet proof:
 - Do not use local-only values (for example `127.0.0.1:8545` or local IPFS daemon URLs) in Railway.
 - If local override files exist from demo scripts (`backend/.env.local`, `frontend/.env.local`), do not commit them.
 - Frontend defaults to same-origin API in production, so `VITE_API_BASE_URL` is optional for single-service deployment.
+- Without a mounted Railway Volume, SQLite in container storage is ephemeral and registrations may appear lost after redeploy/restart.
 
 ### Free Blockchain On Railway (Polygon Amoy)
 

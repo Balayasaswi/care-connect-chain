@@ -7,7 +7,8 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const exportsDir = path.join(__dirname, 'exports');
+const defaultExportsBase = process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : __dirname;
+const exportsDir = process.env.EXPORTS_DIR || path.join(defaultExportsBase, 'exports');
 const usersCsvPath = path.join(exportsDir, 'users.csv');
 const guardiansCsvPath = path.join(exportsDir, 'guardians.csv');
 const ipfsCsvPath = path.join(exportsDir, 'ipfs.csv');
