@@ -56,6 +56,13 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+const IS_RAILWAY =
+  Boolean(process.env.RAILWAY_PROJECT_ID) ||
+  Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+  Boolean(process.env.RAILWAY_SERVICE_ID);
+const ACTIVE_DB_PATH =
+  process.env.DB_PATH || (IS_RAILWAY ? '/data/care-connect.db' : path.join(__dirname, 'care-connect.db'));
+
 const FRONTEND_DIST_DIR = path.resolve(__dirname, '../frontend/dist');
 const FRONTEND_INDEX_FILE = path.join(FRONTEND_DIST_DIR, 'index.html');
 const PINATA_BASE_URL = 'https://api.pinata.cloud';
@@ -586,7 +593,11 @@ function buildFallbackSummaryFromHistory(history) {
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'Care Connect backend running' });
+  res.json({
+    status: 'Care Connect backend running',
+    db_path: ACTIVE_DB_PATH,
+    db_exists: fs.existsSync(ACTIVE_DB_PATH),
+  });
 });
 
 // ==================== AUTH ENDPOINTS ====================
@@ -2016,6 +2027,8 @@ if (fs.existsSync(FRONTEND_DIST_DIR)) {
   app.get('/', (_req, res) => {
     res.json({
       status: 'Care Connect backend running',
+      db_path: ACTIVE_DB_PATH,
+      db_exists: fs.existsSync(ACTIVE_DB_PATH),
       frontend: 'not built',
       hint: 'Build frontend/dist to serve UI from this service',
     });
