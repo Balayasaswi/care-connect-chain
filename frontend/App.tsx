@@ -1351,7 +1351,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
               >
                 <span className="flex items-center gap-2 text-sm font-medium">
                   <Bell size={16} className="text-teal-600" />
-                  Notifications
+                  Escalation Requests
                 </span>
                 {pendingNotificationsCount > 0 && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold uppercase tracking-widest">
@@ -1410,7 +1410,7 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                   <ChevronLeft size={14} />
                   Back to Students
                 </button>
-                <h2 className="text-2xl font-serif text-slate-800 mt-3">Notifications</h2>
+                <h2 className="text-2xl font-serif text-slate-800 mt-3">Escalation Requests</h2>
                 <p className="text-sm text-slate-500 mt-1">
                   Escalation alerts and pending session scheduling requests.
                 </p>
@@ -1481,53 +1481,85 @@ const CounsellorDashboard: React.FC<{ user: User; onLogout: () => void }> = ({
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white">
-                <ol className="divide-y divide-slate-100">
-                  {filteredStudents.map((student, index) => {
-                    const pendingUrgency = pendingUrgencyByStudent.get(student.id);
-                    const isSelected = selectedStudent?.id === student.id;
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                <table className="w-full min-w-[760px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                        Student Name
+                      </th>
+                      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                        Email
+                      </th>
+                      <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                        Priority
+                      </th>
+                      <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                        Status
+                      </th>
+                      <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((student) => {
+                      const pendingUrgency = pendingUrgencyByStudent.get(student.id);
+                      const isSelected = selectedStudent?.id === student.id;
 
-                    return (
-                      <li key={student.id}>
-                        <button
-                          type="button"
+                      return (
+                        <tr
+                          key={student.id}
                           onClick={() => selectStudent(student)}
-                          className={`w-full text-left px-4 py-3 transition-colors ${isSelected ? 'bg-teal-50' : 'bg-white hover:bg-slate-50'}`}
+                          className={`border-b border-slate-100 hover:bg-teal-50 cursor-pointer transition-colors ${
+                            isSelected ? 'bg-teal-50 border-l-4 border-l-teal-400' : ''
+                          }`}
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span
-                                className={`w-7 h-7 shrink-0 rounded-full text-[11px] font-bold flex items-center justify-center ${isSelected ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'}`}
-                              >
-                                {index + 1}
+                          <td className="px-4 py-3 text-sm font-semibold text-slate-800">
+                            {student.username || 'Student'}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-600">{student.email}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span
+                              className={`inline-block px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${
+                                pendingUrgency === 'critical'
+                                  ? 'bg-rose-100 text-rose-700 border-rose-200'
+                                  : pendingUrgency === 'bad'
+                                    ? 'bg-amber-100 text-amber-700 border-amber-200'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              {pendingUrgency || 'Normal'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {isSelected ? (
+                              <span className="inline-block px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-teal-100 text-teal-700 border border-teal-200">
+                                Active
                               </span>
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-slate-800 truncate">
-                                  {student.username || 'Student'}
-                                </p>
-                                <p className="text-xs text-slate-500 truncate">{student.email}</p>
-                              </div>
-                            </div>
-                            <div className="shrink-0 flex items-center gap-2">
-                              {pendingUrgency && (
-                                <span
-                                  className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-widest ${pendingUrgency === 'critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}
-                                >
-                                  {pendingUrgency}
-                                </span>
-                              )}
-                              {isSelected && (
-                                <span className="text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-widest bg-teal-100 text-teal-700">
-                                  Active
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ol>
+                            ) : (
+                              <span className="inline-block px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
+                                Idle
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                selectStudent(student);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700"
+                            >
+                              Open
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
               {filteredStudents.length === 0 && (
                 <p className="text-sm text-slate-500">No students match your search.</p>
