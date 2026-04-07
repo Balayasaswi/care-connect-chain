@@ -1,6 +1,6 @@
 import { pipeline } from '@xenova/transformers';
 
-const SENTIMENT_MODEL = 'Xenova/nlptown/bert-base-multilingual-uncased-sentiment';
+const SENTIMENT_MODEL = 'Xenova/bert-base-multilingual-uncased-sentiment';
 const EMBEDDING_MODEL = 'Xenova/bert-base-uncased';
 
 const STOPWORDS = new Set([
