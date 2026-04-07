@@ -45,6 +45,7 @@ import {
   saveSessionArchive,
   getSessionArchivesByStudent,
 } from './auth.js';
+import { extractKeywordsAndEmotion } from './bertNlp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -524,6 +525,62 @@ function shortenSummaryText(value) {
   const words = firstSentence.split(' ').filter(Boolean);
   const limited = words.slice(0, 18).join(' ').trim();
   return limited || 'Summary unavailable.';
+}
+
+function normalizeHistoryForSummary(history) {
+  if (!Array.isArray(history)) return [];
+
+  return history
+    .filter((item) => {
+      const role = String(item?.role || '').toLowerCase();
+      const content = String(item?.content || '').trim();
+      return (role === 'user' || role === 'assistant') && Boolean(content);
+    })
+    .map((item) => ({
+      role: String(item.role).toLowerCase(),
+      content: String(item.content).trim(),
+      timestamp: item?.timestamp || item?.createdAt || item?.time || null,
+    }));
+}
+
+function buildTranscriptFromHistory(history) {
+  return history
+    .map((item) => `${item.role.toUpperCase()}: ${item.content}`)
+    .join('\n');
+}
+
+function resolveHistoryTimestamp(value, fallbackIso) {
+  const raw = String(value || '').trim();
+  if (!raw) return fallbackIso;
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return fallbackIso;
+  }
+
+  return parsed.toISOString();
+}
+
+function buildFallbackSummaryFromHistory(history) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return 'Session completed with supportive conversation.';
+  }
+
+  const lastUserMessage = [...history]
+    .reverse()
+    .find((item) => item.role === 'user' && item.content);
+  if (lastUserMessage) {
+    return shortenSummaryText(lastUserMessage.content);
+  }
+
+  const lastAssistantMessage = [...history]
+    .reverse()
+    .find((item) => item.role === 'assistant' && item.content);
+  if (lastAssistantMessage) {
+    return shortenSummaryText(lastAssistantMessage.content);
+  }
+
+  return 'Session completed with supportive conversation.';
 }
 
 // Encryption removed for now; payloads are stored in IPFS as plain JSON.
@@ -1674,39 +1731,107 @@ app.post('/api/chat', async (req, res) => {
 
 app.post('/api/summary', async (req, res) => {
   try {
-    const groq = getGroqClient();
     const { history = [], userId } = req.body || {};
 
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    if (!Array.isArray(history) || history.length === 0) {
+    const safeHistory = normalizeHistoryForSummary(history);
+
+    if (!safeHistory.length) {
       return res.status(400).json({ error: 'history is required' });
     }
 
-    const prompt = buildSummaryPrompt(userId, history);
-    const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.2,
-    });
+    const nowIso = new Date().toISOString();
+    const start_time_stamp = resolveHistoryTimestamp(safeHistory[0]?.timestamp, nowIso);
+    const end_time_stamp = resolveHistoryTimestamp(
+      safeHistory[safeHistory.length - 1]?.timestamp,
+      nowIso,
+    );
 
-    const raw = response.choices[0]?.message?.content ?? '';
-    const parsed = safeParseSummaryJson(raw);
+    const transcript = buildTranscriptFromHistory(safeHistory);
 
-    if (!parsed) {
-      return res.status(502).json({ error: 'Failed to parse summary JSON' });
+    let summary = buildFallbackSummaryFromHistory(safeHistory);
+    let groqKeywords = [];
+    let groqEmotion = 'NEUTRAL';
+
+    try {
+      const groq = getGroqClient();
+      const prompt = buildSummaryPrompt(userId, safeHistory);
+      const response = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2,
+      });
+
+      const raw = response.choices[0]?.message?.content ?? '';
+      const parsed = safeParseSummaryJson(raw);
+
+      if (parsed?.summary) {
+        summary = shortenSummaryText(parsed.summary);
+      }
+
+      if (Array.isArray(parsed?.keywords)) {
+        groqKeywords = parsed.keywords
+          .map((keyword) => String(keyword || '').trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 8);
+      }
+
+      const candidateEmotion = String(parsed?.emotion || '')
+        .trim()
+        .toUpperCase();
+      if (['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(candidateEmotion)) {
+        groqEmotion = candidateEmotion;
+      }
+    } catch (summaryError) {
+      console.warn('GROQ summary skipped, using local fallback:', summaryError?.message || summaryError);
     }
 
-    parsed.summary = shortenSummaryText(parsed.summary);
+    let keywords = [];
+    let emotion = 'NEUTRAL';
 
-    res.json(parsed);
+    try {
+      const bertExtraction = await extractKeywordsAndEmotion(transcript, { maxKeywords: 6 });
+      keywords = Array.isArray(bertExtraction.keywords)
+        ? bertExtraction.keywords
+            .map((keyword) => String(keyword || '').trim().toLowerCase())
+            .filter(Boolean)
+        : [];
+
+      const candidateEmotion = String(bertExtraction.emotion || '')
+        .trim()
+        .toUpperCase();
+      if (['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(candidateEmotion)) {
+        emotion = candidateEmotion;
+      }
+    } catch (bertError) {
+      console.warn('BERT extraction failed, using fallback:', bertError?.message || bertError);
+    }
+
+    if (!keywords.length) {
+      keywords = groqKeywords;
+    }
+
+    if (!['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(emotion)) {
+      emotion = groqEmotion;
+    }
+
+    if (!['CRITICAL', 'BAD', 'NEUTRAL', 'GOOD', 'HAPPY'].includes(emotion)) {
+      emotion = 'NEUTRAL';
+    }
+
+    res.json({
+      userid: String(userId),
+      start_time_stamp,
+      end_time_stamp,
+      keywords,
+      emotion,
+      summary: shortenSummaryText(summary),
+    });
   } catch (error) {
     console.error('Summary error:', error);
-    if (String(error?.message || '').includes('GROQ_API_KEY is missing')) {
-      return res.status(503).json({ error: 'GROQ_API_KEY is missing on backend' });
-    }
     res.status(500).json({ error: 'Summary generation failed' });
   }
 });
