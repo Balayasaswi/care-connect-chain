@@ -1,7 +1,7 @@
 import { pipeline } from '@xenova/transformers';
 
-const SENTIMENT_MODEL = 'Xenova/bert-base-multilingual-uncased-sentiment';
-const EMBEDDING_MODEL = 'Xenova/bert-base-uncased';
+const SENTIMENT_MODEL = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english';
+const EMBEDDING_MODEL = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english';
 
 const STOPWORDS = new Set([
   'a',
@@ -274,6 +274,21 @@ function mapStarToEmotion(stars) {
   return 'HAPPY';
 }
 
+function mapBinarySentimentToEmotion(label, score) {
+  const normalizedLabel = String(label || '').toUpperCase();
+  const safeScore = Number(score) || 0;
+
+  if (normalizedLabel.includes('NEGATIVE')) {
+    return safeScore >= 0.92 ? 'CRITICAL' : 'BAD';
+  }
+
+  if (normalizedLabel.includes('POSITIVE')) {
+    return safeScore >= 0.95 ? 'HAPPY' : 'GOOD';
+  }
+
+  return 'NEUTRAL';
+}
+
 const CRITICAL_TERMS = [
   'suicidal',
   'self harm',
@@ -344,10 +359,10 @@ async function extractEmotionWithBert(text) {
   const rawLabel = String(best?.label || '').trim();
   const score = Number(best?.score) || 0;
   const starsMatch = rawLabel.match(/([1-5])/);
-  const stars = starsMatch ? Number(starsMatch[1]) : 3;
+  const stars = starsMatch ? Number(starsMatch[1]) : null;
   const lowerText = normalizeText(normalized);
 
-  let emotion = mapStarToEmotion(stars);
+  let emotion = stars ? mapStarToEmotion(stars) : mapBinarySentimentToEmotion(rawLabel, score);
 
   if (includesAnyTerm(lowerText, CRITICAL_TERMS)) {
     emotion = 'CRITICAL';
