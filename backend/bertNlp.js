@@ -274,6 +274,57 @@ function mapStarToEmotion(stars) {
   return 'HAPPY';
 }
 
+const CRITICAL_TERMS = [
+  'suicidal',
+  'self harm',
+  'kill myself',
+  'end my life',
+  'hopeless',
+  'cannot go on',
+  'panic attack',
+  'cant breathe',
+  'cannot breathe',
+];
+
+const BAD_TERMS = [
+  'anxious',
+  'anxiety',
+  'overwhelmed',
+  'stressed',
+  'stress',
+  'sad',
+  'depressed',
+  'low',
+  'panic',
+  'scared',
+  'angry',
+  'lonely',
+  'burnout',
+  'burned out',
+  'insomnia',
+  'not sleeping',
+  'exhausted',
+  'crying',
+];
+
+const POSITIVE_TERMS = [
+  'calm',
+  'relieved',
+  'better',
+  'good',
+  'grateful',
+  'happy',
+  'hopeful',
+  'confident',
+  'stable',
+  'peaceful',
+  'motivated',
+];
+
+function includesAnyTerm(text, terms) {
+  return terms.some((term) => text.includes(term));
+}
+
 async function extractEmotionWithBert(text) {
   const normalized = String(text || '').trim();
   if (!normalized) {
@@ -294,9 +345,24 @@ async function extractEmotionWithBert(text) {
   const score = Number(best?.score) || 0;
   const starsMatch = rawLabel.match(/([1-5])/);
   const stars = starsMatch ? Number(starsMatch[1]) : 3;
+  const lowerText = normalizeText(normalized);
+
+  let emotion = mapStarToEmotion(stars);
+
+  if (includesAnyTerm(lowerText, CRITICAL_TERMS)) {
+    emotion = 'CRITICAL';
+  } else if (includesAnyTerm(lowerText, BAD_TERMS)) {
+    if (emotion === 'NEUTRAL' || emotion === 'GOOD' || emotion === 'HAPPY') {
+      emotion = 'BAD';
+    }
+  } else if (includesAnyTerm(lowerText, POSITIVE_TERMS)) {
+    if (emotion === 'NEUTRAL') {
+      emotion = 'GOOD';
+    }
+  }
 
   return {
-    emotion: mapStarToEmotion(stars),
+    emotion,
     score,
     label: rawLabel || `${stars} stars`,
   };
